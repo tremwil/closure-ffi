@@ -1,0 +1,31 @@
+[workspace]
+members = ["proc_macros"]
+
+[workspace.package]
+edition = "2021"
+authors = ["William Tremblay <tremwil@users.noreply.github.com>"]
+keywords = ["closure", "ffi"]
+categories = ["development-tools::ffi", "no-std"]
+license = "MIT"
+repository = "https://github.com/tremwil/closure-ffi"
+
+[package]
+name = "closure-ffi"
+version = "0.1.0"
+description = "FFI utilities for creating bare function pointers that invoke a closure"
+edition.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+nightly = []
+no_std = [ "spin" ]
+
+[dependencies]
+closure-ffi-proc-macros = { path = "proc_macros", version = "0.1.0" }
+jit-allocator = "0.2.8"
+spin = { version = "0.9", optional = true }
+seq-macro = "0.3"
