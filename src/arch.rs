@@ -1,4 +1,4 @@
-use crate::jit_alloc::{JitAlloc, JitAllocError};
+use crate::jit_alloc::{JitAlloc, JitAllocError, ProtectJitAccess};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[doc(hidden)]
@@ -7,6 +7,9 @@ pub const CLOSURE_ADDR_MAGIC: usize = 0x0ebe4a8e072bdb2a_u64 as usize;
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 #[doc(hidden)]
 pub const CLOSURE_ADDR_MAGIC: usize = 0x0000DEAD0000DEAD_u64 as usize;
+
+// We have to expose the thunk asm macros to allow the proc macro to generate more complex thunk
+// templates
 
 /// Internal. Do not use.
 #[cfg(target_arch = "x86_64")]
@@ -108,10 +111,10 @@ pub(crate) struct ThunkInfo {
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-pub(crate) unsafe fn create_thunk(
+pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     thunk_template: *const u8,
     closure_ptr: *mut (),
-    jit: &impl JitAlloc,
+    jit: &J,
 ) -> Result<ThunkInfo, JitAllocError> {
     let mut offset = 0;
     while thunk_template.add(offset).cast::<usize>().read_unaligned() != CLOSURE_ADDR_MAGIC {
@@ -121,8 +124,13 @@ pub(crate) unsafe fn create_thunk(
     let thunk_size = offset + THUNK_ASM_EXTRA_BYTES;
     let (rx, rw) = jit.alloc(thunk_size)?;
 
+    J::protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadWrite);
+
     core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
     rw.add(offset).cast::<*mut ()>().write_unaligned(closure_ptr);
+
+    J::protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadExecute);
+    J::flush_instruction_cache(rx, thunk_size);
 
     Ok(ThunkInfo {
         alloc_base: rx,
@@ -131,13 +139,11 @@ pub(crate) unsafe fn create_thunk(
 }
 
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-pub(crate) unsafe fn create_thunk(
+pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     thunk_template: *const u8,
     closure_ptr: *mut (),
-    jit: &impl JitAlloc,
+    jit: &J,
 ) -> Result<ThunkInfo, JitAllocError> {
-    use jit_allocator::ProtectJitAccess;
-
     const PTR_SIZE: usize = std::mem::size_of::<usize>();
 
     let mut offset = thunk_template.align_offset(PTR_SIZE);
@@ -152,13 +158,13 @@ pub(crate) unsafe fn create_thunk(
     let align_offset = rw.add(offset).align_offset(PTR_SIZE);
     let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
 
-    jit_allocator::protect_jit_memory(ProtectJitAccess::ReadWrite);
+    J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
 
     core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
     rw.add(offset).cast::<*mut ()>().write(closure_ptr);
 
-    jit_allocator::protect_jit_memory(ProtectJitAccess::ReadExecute);
-    jit_allocator::flush_instruction_cache(thunk_rx, thunk_size);
+    J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
+    J::flush_instruction_cache(thunk_rx, thunk_size);
 
     Ok(ThunkInfo {
         alloc_base: rx,

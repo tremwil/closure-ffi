@@ -21,11 +21,12 @@ license.workspace = true
 repository.workspace = true
 
 [features]
-nightly = []
+default = [ "bundled-jit-alloc" ]
 no_std = [ "spin" ]
+bundled-jit-alloc = [ "jit-allocator" ]
 
 [dependencies]
 closure-ffi-proc-macros = { path = "proc_macros", version = "0.1.0" }
-jit-allocator = "0.2.8"
+jit-allocator = {version = "0.2.8", optional = true }
 spin = { version = "0.9", optional = true }
 seq-macro = "0.3"
