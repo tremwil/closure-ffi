@@ -1,3 +1,5 @@
+pub use closure_ffi_proc_macros::hrtb_cc as hrtb;
+
 macro_rules! cc_impl {
     ($ty_name:ident, $lit_name:literal) => {
         #[doc = "Marker type representing the"]

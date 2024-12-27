@@ -172,4 +172,4 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     })
 }
 
-pub(crate) use _thunk_asm;
+pub use _thunk_asm;
