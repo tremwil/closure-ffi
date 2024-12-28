@@ -110,66 +110,71 @@ pub(crate) struct ThunkInfo {
     pub thunk: *const (),
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+/// Creates a thunk to a closure from a thunk template.
+///
+/// # Safety
+/// Given a closure of type `F`, the following must hold:
+/// - `thunk_template` is a pointer obtained via the associated const of the
+///     `crate::thunk::Fn*Thunk<C, B>` trait implemented on (C, F). Namely, it is a bare function
+///     that first invokes [`_thunk_asm`] to obtain the closure pointer, then invokes it.
+/// - `closure_ptr` is a valid pointer to an initialized instance of `F`.
 pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     thunk_template: *const u8,
-    closure_ptr: *mut (),
+    closure_ptr: *const (),
     jit: &J,
 ) -> Result<ThunkInfo, JitAllocError> {
-    let mut offset = 0;
-    while thunk_template.add(offset).cast::<usize>().read_unaligned() != CLOSURE_ADDR_MAGIC {
-        offset += 1;
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        let mut offset = 0;
+        while thunk_template.add(offset).cast::<usize>().read_unaligned() != CLOSURE_ADDR_MAGIC {
+            offset += 1;
+        }
+
+        let thunk_size = offset + THUNK_ASM_EXTRA_BYTES;
+        let (rx, rw) = jit.alloc(thunk_size)?;
+
+        J::protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadWrite);
+
+        core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
+        rw.add(offset).cast::<*const ()>().write_unaligned(closure_ptr);
+
+        J::protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadExecute);
+        J::flush_instruction_cache(rx, thunk_size);
+
+        Ok(ThunkInfo {
+            alloc_base: rx,
+            thunk: rx.cast(),
+        })
     }
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    {
+        const PTR_SIZE: usize = std::mem::size_of::<usize>();
 
-    let thunk_size = offset + THUNK_ASM_EXTRA_BYTES;
-    let (rx, rw) = jit.alloc(thunk_size)?;
+        let mut offset = thunk_template.align_offset(PTR_SIZE);
+        while thunk_template.add(offset).cast::<usize>().read() != CLOSURE_ADDR_MAGIC {
+            offset += PTR_SIZE;
+        }
 
-    J::protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadWrite);
+        let thunk_size = offset + THUNK_ASM_EXTRA_BYTES;
 
-    core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
-    rw.add(offset).cast::<*mut ()>().write_unaligned(closure_ptr);
+        // Skip initial bytes for proper alignment
+        let (rx, rw) = jit.alloc(thunk_size + PTR_SIZE - 1)?;
+        let align_offset = rw.add(offset).align_offset(PTR_SIZE);
+        let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
 
-    J::protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadExecute);
-    J::flush_instruction_cache(rx, thunk_size);
+        J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
 
-    Ok(ThunkInfo {
-        alloc_base: rx,
-        thunk: rx.cast(),
-    })
-}
+        core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
+        rw.add(offset).cast::<*mut ()>().write(closure_ptr);
 
-#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-pub(crate) unsafe fn create_thunk<J: JitAlloc>(
-    thunk_template: *const u8,
-    closure_ptr: *mut (),
-    jit: &J,
-) -> Result<ThunkInfo, JitAllocError> {
-    const PTR_SIZE: usize = std::mem::size_of::<usize>();
+        J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
+        J::flush_instruction_cache(thunk_rx, thunk_size);
 
-    let mut offset = thunk_template.align_offset(PTR_SIZE);
-    while thunk_template.add(offset).cast::<usize>().read() != CLOSURE_ADDR_MAGIC {
-        offset += PTR_SIZE;
+        Ok(ThunkInfo {
+            alloc_base: rx,
+            thunk: thunk_rx.cast(),
+        })
     }
-
-    let thunk_size = offset + THUNK_ASM_EXTRA_BYTES;
-
-    // Skip initial bytes for proper alignment
-    let (rx, rw) = jit.alloc(thunk_size + PTR_SIZE - 1)?;
-    let align_offset = rw.add(offset).align_offset(PTR_SIZE);
-    let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
-
-    J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
-
-    core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
-    rw.add(offset).cast::<*mut ()>().write(closure_ptr);
-
-    J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
-    J::flush_instruction_cache(thunk_rx, thunk_size);
-
-    Ok(ThunkInfo {
-        alloc_base: rx,
-        thunk: thunk_rx.cast(),
-    })
 }
 
 pub use _thunk_asm;

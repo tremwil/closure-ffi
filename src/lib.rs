@@ -11,9 +11,18 @@ compile_error!("closure-ffi is not supported on this target architecture.");
 #[cfg(feature = "no_std")]
 extern crate alloc;
 
+#[doc(hidden)]
+pub mod arch;
+
+pub mod bare_closure;
 pub mod cc;
 pub mod jit_alloc;
 pub mod thunk;
 
-#[doc(hidden)]
-pub mod arch;
+pub mod prelude {
+    pub use super::bare_closure::{BareFn, BareFnMut, BareFnOnce};
+    pub use super::cc;
+    pub use super::jit_alloc::{JitAlloc, JitAllocError};
+}
+
+pub use prelude::*;

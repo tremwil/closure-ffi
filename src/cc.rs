@@ -5,7 +5,7 @@ macro_rules! cc_impl {
         #[doc = "Marker type representing the"]
         #[doc = $lit_name]
         #[doc = "calling convention."]
-        #[derive(Debug, Clone, Copy)]
+        #[derive(Debug, Clone, Copy, Default)]
         pub struct $ty_name;
         $crate::thunk::cc_thunk_impl!($ty_name, $lit_name);
     };

@@ -1,13 +1,13 @@
 pub unsafe trait FnOnceThunk<CC, Bare: Copy> {
-    const THUNK_TEMPLATE_ONCE: Bare;
+    const THUNK_TEMPLATE_ONCE: *const u8;
 }
 
 pub unsafe trait FnMutThunk<CC, Bare: Copy>: FnOnceThunk<CC, Bare> {
-    const THUNK_TEMPLATE_MUT: Bare;
+    const THUNK_TEMPLATE_MUT: *const u8;
 }
 
 pub unsafe trait FnThunk<CC, Bare: Copy>: FnMutThunk<CC, Bare> {
-    const THUNK_TEMPLATE: Bare;
+    const THUNK_TEMPLATE: *const u8;
 }
 
 macro_rules! thunk_impl_triple {
@@ -15,37 +15,37 @@ macro_rules! thunk_impl_triple {
         unsafe impl<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>
             $crate::thunk::FnOnceThunk<$cconv, unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
-            const THUNK_TEMPLATE_ONCE: unsafe extern $cconv_lit fn($($tys,)*) -> R = {
+            const THUNK_TEMPLATE_ONCE: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *mut F;
                     $crate::arch::_thunk_asm!(closure_ptr);
                     closure_ptr.read()($($args),*)
                 }
-                thunk::<F, R, $($tys),*>
+                thunk::<F, R, $($tys),*> as *const u8
             };
         }
         unsafe impl<F: FnMut($($tys),*) -> R, R, $($id_tys),*>
             $crate::thunk::FnMutThunk<$cconv, unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
-            const THUNK_TEMPLATE_MUT: unsafe extern $cconv_lit fn($($tys,)*) -> R = {
+            const THUNK_TEMPLATE_MUT: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: FnMut($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *mut F;
                     $crate::arch::_thunk_asm!(closure_ptr);
                     (&mut *closure_ptr)($($args),*)
                 }
-                thunk::<F, R, $($tys),*>
+                thunk::<F, R, $($tys),*> as *const u8
             };
         }
         unsafe impl<F: Fn($($tys),*) -> R, R, $($id_tys),*>
             $crate::thunk::FnThunk<$cconv, unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
-            const THUNK_TEMPLATE: unsafe extern $cconv_lit fn($($tys,)*) -> R = {
+            const THUNK_TEMPLATE: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: Fn($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *const F;
                     $crate::arch::_thunk_asm!(closure_ptr);
                     (&*closure_ptr)($($args),*)
                 }
-                thunk::<F, R, $($tys),*>
+                thunk::<F, R, $($tys),*> as *const u8
             };
         }
     };

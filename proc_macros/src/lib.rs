@@ -33,14 +33,12 @@ impl syn::parse::Parse for MacroInput {
         for attr in all_attrs {
             if !attr.path().is_ident("with") {
                 attrs.push(attr);
-            }
-            else if generics.is_some() {
+            } else if generics.is_some() {
                 return Err(syn::Error::new_spanned(
                     attr.path().get_ident(),
                     "with attribute is already present",
                 ));
-            }
-            else {
+            } else {
                 let meta_list = attr.meta.require_list()?;
                 generics = Some(meta_list.parse_args::<GenericsWithWhere>()?.0);
             }
@@ -233,11 +231,11 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
             unsafe impl #impl_generics #thunk_trait<_CustomThunk, #bare_fn>
             for (_CustomThunk, #f_ident) #where_clause
             {
-                const #const_ident: #bare_fn = {
+                const #const_ident: *const u8 = {
                     #thunk_sig {
                         #body
                     }
-                    #thunk_ident::<#(#sig_tys),*>
+                    #thunk_ident::<#(#sig_tys),*> as *const u8
                 };
             }
         }
