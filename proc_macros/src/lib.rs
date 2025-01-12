@@ -123,6 +123,27 @@ impl<F: FnMut(&mut syn::Lifetime)> syn::visit_mut::VisitMut for ReplaceLt<F> {
     }
 }
 
+/// Creates an instance of an anonymous type which can be used as a calling convention
+/// for higher-kinded bare functions when instantiating bare closure wrappers.
+///
+/// This hack is necessary as there is no way to blanket implement the `FnThunk` traits for all
+/// lifetime associations.
+///
+/// For example, the following evaluates to an expression which can be passed to `BareFn*::new`
+/// to create an adapter for the closure of type *exactly* `unsafe extern "C" for<'a> fn(&'a str) -> &'a u32`:
+///
+/// ```no_run
+/// hrtb_cc!(extern "C" for<'a> fn(&'a str) -> &'a u32)
+/// ```
+///
+/// Note that the `unsafe` keyword is automatically added if not present.
+///
+/// The bare function signature can additionally contain generic arguments using the `#[with]`
+/// attribute:
+///
+/// ```no_run
+/// hrtb_cc!(#[with(<T>)] extern "C" for<'a> fn(&'a str) -> &'a T)
+/// ```
 #[proc_macro]
 pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(tokens as MacroInput);
