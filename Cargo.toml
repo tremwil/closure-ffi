@@ -30,3 +30,7 @@ closure-ffi-proc-macros = { path = "proc_macros", version = "0.1.0" }
 jit-allocator = {version = "0.2.8", optional = true }
 spin = { version = "0.9", optional = true }
 seq-macro = "0.3"
+
+[dev-dependencies]
+jit-allocator = { version = "0.2.8" }
+spin = { version = "0.9" }

@@ -1,20 +1,11 @@
-// use closure_ffi::{cc, thunk::FnMutThunk};
+use closure_ffi::{cc, BareFn};
 
-// fn into_bare<C, B: Copy, F>(_cconv: C, _fun: F) -> B
-// where
-//     (C, F): FnMutThunk<C, B>,
-// {
-//     todo!()
-// }
+#[test]
+fn test_hrtb() {
+    let bare_closure = BareFn::new(
+        cc::hrtb!(#[with(<T>)] unsafe extern "C" fn(&Option<T>) -> Option<&T>),
+        |opt| opt.as_ref(),
+    );
 
-// fn takes_bare(_: unsafe extern "C" fn(usize) -> i32) {}
-// fn takes_hrtb<T>(_: unsafe extern "C" fn(&Option<T>) -> Option<&T>) {}
-
-// fn test() {
-//     takes_hrtb(into_bare(
-//         cc::hrtb!(unsafe extern "C" fn(&Option<()>) -> Option<&()>),
-//         |a| a.as_ref(),
-//     ));
-
-//     takes_bare(into_bare(cc::C, |i| i as i32));
-// }
+    assert_eq!(unsafe { bare_closure.bare()(&Some(123)) }, Some(&123));
+}

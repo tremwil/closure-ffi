@@ -15,6 +15,8 @@ macro_rules! cc_shorthand {
         #[doc = "Create a bare function thunk using the "]
         #[doc = $cc_name]
         #[doc = "calling convention for `fun`."]
+        ///
+        /// The W^X memory required is allocated using the global JIT allocator.
         #[inline]
         pub fn $fn_name(fun: F) -> Self
         where
@@ -27,10 +29,12 @@ macro_rules! cc_shorthand {
 
 macro_rules! bare_closure_impl {
     (
-        $ty_name:ident, 
-        $trait_ident:ident, 
-        $thunk_template:ident, 
-        $fn_trait_doc:literal, 
+        $ty_name:ident,
+        $trait_ident:ident,
+        $thunk_template:ident,
+        $bare_toggle:meta,
+        $bare_receiver:ty,
+        $fn_trait_doc:literal,
         $safety_doc:literal
     ) => {
         /// Wrapper around a
@@ -63,7 +67,7 @@ macro_rules! bare_closure_impl {
 
                 // SAFETY:
                 // - thunk_template pointer obtained from the correct source
-                // - `closure.downcast_ref()` is a valid pointer to `fun`
+                // - `closure` is a valid pointer to `fun`
                 let thunk_info = unsafe {
                     create_thunk(
                         <(CC, F)>::$thunk_template,
@@ -79,6 +83,7 @@ macro_rules! bare_closure_impl {
                 })
             }
 
+            #[$bare_toggle]
             /// Return a bare function pointer that invokes the underlying closure.
             ///
             /// # Safety
@@ -87,7 +92,7 @@ macro_rules! bare_closure_impl {
             /// - The lifetime of `self` has expired, or `self` has been dropped.
             #[doc = $safety_doc]
             #[inline]
-            pub fn bare(&self) -> B {
+            pub fn bare(self: $bare_receiver) -> B {
                 // SAFETY: B is a bare function pointer
                 unsafe { std::mem::transmute_copy(&self.thunk_info.thunk) }
             }
@@ -105,7 +110,9 @@ macro_rules! bare_closure_impl {
             where
                 Self: 'static,
             {
-                ManuallyDrop::new(self).bare()
+                let no_drop = ManuallyDrop::new(self);
+                // SAFETY: B is a bare function pointer
+                unsafe { std::mem::transmute_copy(&no_drop.thunk_info.thunk) }
             }
         }
 
@@ -119,7 +126,7 @@ macro_rules! bare_closure_impl {
             }
         }
 
-        #[cfg(feature = "bundled-jit-alloc")]
+        #[cfg(any(test, feature = "bundled-jit-alloc"))]
         impl<B: Copy, F> $ty_name<B, F, jit_alloc::GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
@@ -160,26 +167,96 @@ macro_rules! bare_closure_impl {
     };
 }
 
+// TODO:
+// BareFnOnce still needs work.
+// In particular, to avoid leaks we need to have the compiler generated thunk
+// call `release` on the allocator after it's done running, then drop the allocator.
+// Then, to avoid double frees we need `bare` to be taken by value.
+//
+// At the moment, we simply force leaking for `BareFnOnce` by omitting `bare()`.
+
 bare_closure_impl!(
     BareFnOnce,
     FnOnceThunk,
     THUNK_TEMPLATE_ONCE,
+    cfg(any()),
+    Self,
     "[`FnOnce`]",
     "- The function has been called before.\n
 - The closure is not `Send`, if calling from a different thread than the current one."
 );
+
 bare_closure_impl!(
     BareFnMut,
     FnMutThunk,
     THUNK_TEMPLATE_MUT,
+    cfg(all()),
+    &mut Self,
     "[`FnMut`]",
     "- A borrow induced by a previous call is still active.\n
 - The closure is not `Sync`, if calling from a different thread than the current one."
 );
 bare_closure_impl!(
-    BareFn, 
-    FnThunk, 
-    THUNK_TEMPLATE, 
-    "[`Fn`]", 
+    BareFn,
+    FnThunk,
+    THUNK_TEMPLATE,
+    cfg(all()),
+    &Self,
+    "[`Fn`]",
     "- The closure is not `Sync`, if calling from a different thread than the current one."
 );
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_fn_once() {
+        use super::BareFnOnce;
+
+        let value = "test".to_owned();
+        let bare_closure = BareFnOnce::new_c(move |n: usize| value + &n.to_string());
+
+        // bare() not available on `BareFnOnce` yet
+        let bare = bare_closure.leak();
+
+        let result = unsafe { bare(5) };
+        assert_eq!(&result, "test5");
+    }
+
+    #[test]
+    fn test_fn_mut() {
+        use super::BareFnMut;
+
+        let mut value = "0".to_owned();
+        let mut bare_closure = BareFnMut::new_c(|n: usize| {
+            value += &n.to_string();
+            value.clone()
+        });
+
+        let bare = bare_closure.bare();
+
+        let result = unsafe { bare(1) };
+        assert_eq!(&result, "01");
+
+        let result = unsafe { bare(2) };
+        assert_eq!(&result, "012");
+    }
+
+    #[test]
+    fn test_fn() {
+        use super::BareFn;
+
+        let cell = core::cell::RefCell::new("0".to_owned());
+        let bare_closure = BareFn::new_c(|n: usize| {
+            *cell.borrow_mut() += &n.to_string();
+            cell.borrow().clone()
+        });
+
+        let bare = bare_closure.bare();
+
+        let result = unsafe { bare(1) };
+        assert_eq!(&result, "01");
+
+        let result = unsafe { bare(2) };
+        assert_eq!(&result, "012");
+    }
+}
