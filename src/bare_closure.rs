@@ -25,7 +25,7 @@ macro_rules! cc_shorthand {
     };
 }
 
-macro_rules! bare_closure {
+macro_rules! bare_closure_impl {
     (
         $ty_name:ident, 
         $trait_ident:ident, 
@@ -160,18 +160,26 @@ macro_rules! bare_closure {
     };
 }
 
-bare_closure!(
+bare_closure_impl!(
     BareFnOnce,
     FnOnceThunk,
     THUNK_TEMPLATE_ONCE,
     "[`FnOnce`]",
-    "- The function has been called before."
+    "- The function has been called before.\n
+- The closure is not `Send`, if calling from a different thread than the current one."
 );
-bare_closure!(
+bare_closure_impl!(
     BareFnMut,
     FnMutThunk,
     THUNK_TEMPLATE_MUT,
     "[`FnMut`]",
-    "- A borrow induced by a previous call is still active."
+    "- A borrow induced by a previous call is still active.\n
+- The closure is not `Sync`, if calling from a different thread than the current one."
 );
-bare_closure!(BareFn, FnThunk, THUNK_TEMPLATE, "[`Fn`]", "");
+bare_closure_impl!(
+    BareFn, 
+    FnThunk, 
+    THUNK_TEMPLATE, 
+    "[`Fn`]", 
+    "- The closure is not `Sync`, if calling from a different thread than the current one."
+);
