@@ -8,8 +8,8 @@ pub const CLOSURE_ADDR_MAGIC: usize = 0x0ebe4a8e072bdb2a_u64 as usize;
 #[doc(hidden)]
 pub const CLOSURE_ADDR_MAGIC: usize = 0x0000DEAD0000DEAD_u64 as usize;
 
-// We have to expose the thunk asm macros to allow the proc macro to generate more complex thunk
-// templates
+// We have to expose the thunk asm macros to allow the hrtb_cc proc macro to generate more complex
+// thunk templates
 
 /// Internal. Do not use.
 #[cfg(target_arch = "x86_64")]

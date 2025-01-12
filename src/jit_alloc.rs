@@ -11,6 +11,9 @@ pub enum ProtectJitAccess {
 }
 
 /// Generic allocator providing virtual memory suitable for emitting code at runtime.
+///
+/// The API is meant to be a thin abstraction over the `jit-allocator` crate's API, to allow it
+/// to be swapped with other allocators.
 pub trait JitAlloc {
     /// Allocates `size` bytes in the executable memory region.
     /// Returns two pointers. One points to Read-Execute mapping and another to Read-Write mapping.
