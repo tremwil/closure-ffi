@@ -37,3 +37,6 @@ seq-macro = "0.3"
 jit-allocator = { version = "0.2.8" }
 spin = { version = "0.9" }
 closure-ffi = { path = ".", features = ["hrtb_macro"] }
+
+[package.metadata.docs.rs]
+features = ["full"]
