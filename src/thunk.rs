@@ -1,11 +1,14 @@
+#[allow(clippy::missing_safety_doc)]
 pub unsafe trait FnOnceThunk<CC, Bare: Copy> {
     const THUNK_TEMPLATE_ONCE: *const u8;
 }
 
+#[allow(clippy::missing_safety_doc)]
 pub unsafe trait FnMutThunk<CC, Bare: Copy>: FnOnceThunk<CC, Bare> {
     const THUNK_TEMPLATE_MUT: *const u8;
 }
 
+#[allow(clippy::missing_safety_doc)]
 pub unsafe trait FnThunk<CC, Bare: Copy>: FnMutThunk<CC, Bare> {
     const THUNK_TEMPLATE: *const u8;
 }

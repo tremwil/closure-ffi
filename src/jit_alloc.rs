@@ -22,7 +22,7 @@ pub trait JitAlloc {
 
     /// Releases the memory allocated by `alloc`.
     ///
-    /// # SAFETY
+    /// # Safety
     /// - `rx_ptr` must have been returned from `alloc`
     /// - `rx_ptr` must have been allocated from this allocator
     /// - `rx_ptr` must not have been passed to `release` before
@@ -35,7 +35,7 @@ pub trait JitAlloc {
     /// This is expected to be a no-op on most platforms, but should be called before writing
     /// or executing JIT memory.
     ///
-    /// # SAFETY
+    /// # Safety
     ///
     /// - `ptr` must point at least `size` bytes of readable memory.
     unsafe fn protect_jit_memory(ptr: *const u8, size: usize, access: ProtectJitAccess);
@@ -45,12 +45,12 @@ pub trait JitAlloc {
     ///
     /// On architectures with shared data/instruction caches, like x86_64, this is a no-op.
     ///
-    /// # SAFETY
+    /// # Safety
     /// - `rx_ptr` must point at least `size` bytes of Read-Execute memory.
     unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize);
 }
 
-impl<'a, J: JitAlloc> JitAlloc for &'a J {
+impl<J: JitAlloc> JitAlloc for &J {
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
         (*self).alloc(size)
     }
@@ -167,9 +167,8 @@ mod bundled_jit_alloc {
             #[cfg(not(feature = "no_std"))]
             let mut maybe_alloc = GLOBAL_JIT_ALLOC.lock().unwrap();
 
-            let mut alloc =
-                maybe_alloc.get_or_insert_with(|| JitAllocator::new(Default::default()));
-            action(&mut alloc)
+            let alloc = maybe_alloc.get_or_insert_with(|| JitAllocator::new(Default::default()));
+            action(alloc)
         }
     }
 

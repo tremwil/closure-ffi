@@ -76,14 +76,14 @@ fn bare_fn_to_sig(
     syn::Signature {
         constness: None,
         asyncness: None,
-        unsafety: fun.unsafety.clone(),
+        unsafety: fun.unsafety,
         abi: fun.abi.clone(),
         fn_token: syn::Token![fn](pm2::Span::call_site()),
         ident,
         generics: syn::Generics {
-            lt_token: fun.lifetimes.as_ref().map(|lt| lt.lt_token.clone()),
+            lt_token: fun.lifetimes.as_ref().map(|lt| lt.lt_token),
             params: fun.lifetimes.as_ref().map(|lt| lt.lifetimes.clone()).unwrap_or_default(),
-            gt_token: fun.lifetimes.as_ref().map(|lt| lt.gt_token.clone()),
+            gt_token: fun.lifetimes.as_ref().map(|lt| lt.gt_token),
             where_clause: None,
         },
         paren_token: syn::token::Paren::default(),
@@ -160,7 +160,7 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
         .map(|i| syn::Ident::new(&format!("a{i}"), pm2::Span::call_site()))
         .collect();
 
-    let mut thunk_sig = bare_fn_to_sig(&bare_fn, thunk_ident.clone(), &arg_idents);
+    let mut thunk_sig = bare_fn_to_sig(bare_fn, thunk_ident.clone(), &arg_idents);
 
     let bare_fn_lt_idents = bare_fn
         .lifetimes
@@ -228,9 +228,9 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
     let impls = impl_blocks.iter().map(|impl_block| {
         let fn_bound =
             bare_fn_to_trait_bound(&input.bare_fn, path_from_str(impl_block.fn_trait_path));
-        let const_ident = syn::Ident::new(&impl_block.const_name, pm2::Span::call_site());
+        let const_ident = syn::Ident::new(impl_block.const_name, pm2::Span::call_site());
         let body = &impl_block.body;
-        let thunk_trait = path_from_str(&impl_block.thunk_trait_path);
+        let thunk_trait = path_from_str(impl_block.thunk_trait_path);
 
         let mut generics = input.generics.clone();
         generics.params.push(syn::GenericParam::Type(syn::TypeParam {
