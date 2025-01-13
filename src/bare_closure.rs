@@ -1,7 +1,9 @@
-use core::{marker::PhantomData, mem::ManuallyDrop, pin::Pin};
+//! Provides the [`BareFnOnce`], [`BareFnMut`] and [`BareFn`] wrapper types which allow closures to
+//! be called through context-free unsafe bare functions.
 
 #[cfg(feature = "no_std")]
 use alloc::Box;
+use core::{marker::PhantomData, mem::ManuallyDrop, pin::Pin};
 
 use crate::{
     arch::{create_thunk, ThunkInfo},
@@ -97,7 +99,8 @@ macro_rules! bare_closure_impl {
                 unsafe { std::mem::transmute_copy(&self.thunk_info.thunk) }
             }
 
-            /// Leak the underlying closure, returning the unsafe bare function pointer that invokes it.
+            /// Leak the underlying closure, returning the unsafe bare function pointer that invokes
+            /// it.
             ///
             /// `self` must be `'static` for this method to be called.
             ///

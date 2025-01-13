@@ -1,3 +1,11 @@
+//! Abstractions around allocators that provide dual-mapped memory with XOR protection rules (one RW
+//! view and one RX view) suitable for emitting code at runtime.
+//!
+//! Meant to be an abstraction over the `jit-allocator` crate's API so that it can be swapped with
+//! user-provided allocators.
+//!
+//! See the [`JitAlloc`] trait for more information.
+
 #[derive(Debug)]
 pub struct JitAllocError;
 
