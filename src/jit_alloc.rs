@@ -167,6 +167,8 @@ mod bundled_jit_alloc {
     ///
     /// This is currently implemented as a ZST deffering to a static [`jit_allocator::JitAllocator`]
     /// behind a [`std::sync::Mutex`] (or a [`spin::Mutex`] under no_std).
+    ///
+    /// [`spin::Mutex`]: https://docs.rs/spin/0.9/spin/type.Mutex.html
     #[derive(Default, Clone, Copy)]
     pub struct GlobalJitAlloc;
 

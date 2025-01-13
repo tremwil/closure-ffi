@@ -1,6 +1,6 @@
 [package]
 name = "closure-ffi-proc-macros"
-version = "0.1.0"
+version = "0.1.1"
 description = "Proc macros used and exported by the closure-ffi crate"
 edition.workspace = true
 authors.workspace = true

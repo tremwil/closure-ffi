@@ -4,8 +4,22 @@
 //! Context-free bare functions are not needed very often, as properly designed C APIs typically
 //! allow the user to specify an opaque pointer to a context object which will be provided to the
 //! function pointer. However, this is not always the case, and may be impossible in less common
-//! scenarios, e.g. function hooking for game modding/hacking. For example:
+//! scenarios, e.g. function hooking for game modding/hacking.
 //!
+//! # Features
+//! The crate comes with the following feature flags:
+//! - `no_std`: Makes the crate compatible with `#![no_std]`. A dependency on `alloc` and `spin` is
+//!   still required.
+//! - `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator`](https://crates.io/crates/jit-allocator)
+//!   crate. This is enabled by default.
+//! - `hrtb_macro`: Provides the [`cc::hrtb`] proc macro which is necessary for creating bare
+//!   functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>`
+//!   statements).
+//! - `full`: Enables all features except for `no_std`.
+//!
+//! # Examples
+//!
+//! Passing a closure to a C API taking a contextless function pointer:
 //! ```
 //! use closure_ffi::{cc, BareFnMut};
 //!

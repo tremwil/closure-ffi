@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi-proc-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
