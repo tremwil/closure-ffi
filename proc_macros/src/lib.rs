@@ -3,7 +3,7 @@ use std::str::FromStr;
 use proc_macro::TokenStream;
 use proc_macro2 as pm2;
 use quote::quote;
-use syn::{parse_macro_input, visit_mut::VisitMut};
+use syn::{parse_macro_input, spanned::Spanned, visit_mut::VisitMut};
 
 // the Parse impl for syn::Generics ignores the where clause. This expects
 // it right after the generic parameters.
@@ -273,3 +273,57 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
     }}
     .into()
 }
+
+// struct BareDynInput {
+//     abi: syn::Ident,
+//     fn_trait: syn::TypeTraitObject,
+//     allocator: Option<syn::Type>,
+//     type_ident: &'static str,
+// }
+
+// impl syn::parse::Parse for BareDynInput {
+//     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+//         let abi = input.parse()?;
+//         let _ = input.parse::<syn::Token![,]>()?;
+//         let fn_trait: syn::TypeTraitObject = input.parse()?;
+
+//         let type_ident = fn_trait
+//             .bounds
+//             .iter()
+//             .find_map(|bound| match bound {
+//                 syn::TypeParamBound::Trait(tb) => {
+//                     tb.path.segments.last().and_then(|seg| match seg.ident.to_string().as_str() {
+//                         "FnOnce" => Some("::closure_ffi::bare_closure::BareFn"),
+//                         "FnMut" => Some("::closure_ffi::bare_closure::BareFnMut"),
+//                         "Fn" => Some("::closure_ffi::bare_closure::BareFn"),
+//                         _ => None,
+//                     })
+//                 }
+//                 _ => None,
+//             })
+//             .ok_or_else(|| {
+//                 syn::Error::new(
+//                     fn_trait.span(),
+//                     "Not a function trait, expected Fn, FnMut or FnOnce",
+//                 )
+//             })?;
+
+//         let allocator = input
+//             .parse::<Option<syn::Token![,]>>()
+//             .and_then(|comma| comma.map(|_| input.parse().map(|x| Some(x))).unwrap_or(Ok(None)))?;
+
+//         Ok(Self {
+//             abi,
+//             fn_trait,
+//             allocator,
+//             type_ident,
+//         })
+//     }
+// }
+
+// #[proc_macro]
+// pub fn bare_dyn(tokens: TokenStream) -> TokenStream {
+//     let input = syn::parse_macro_input!(tokens as BareDynInput);
+
+//     quote! {}.into()
+// }
