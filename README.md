@@ -10,7 +10,7 @@ scenarios, e.g. function hooking for game modding/hacking.
 The crate comes with the following feature flags:
 - `no_std`: Makes the crate compatible with `#![no_std]`. A dependency on `alloc` and `spin` is
   still required.
-- `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator`](https://es.io/crates/jit-allocator)
+- `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator`](https://crates.io/crates/jit-allocator)
   crate. This is enabled by default.
 - `hrtb_macro`: Provides the [`cc::hrtb`] proc macro which is necessary for creating bare
   functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>`
