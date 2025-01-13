@@ -11,10 +11,10 @@
 //!
 //! // Imagine we have an foerign C API for reigstering and unregistering some callback function.
 //! // Notably, the API does not let the user provide a context object to the callback.
-//! unsafe extern "C" ffi_register_callback(cb: unsafe extern "C" fn(u32)) {
+//! unsafe extern "C" fn ffi_register_callback(cb: unsafe extern "C" fn(u32)) {
 //!     // ...
 //! }
-//! unsafe extern "C" ffi_unregister_callback(cb: unsafe extern "C" fn(u32)) {
+//! unsafe extern "C" fn ffi_unregister_callback(cb: unsafe extern "C" fn(u32)) {
 //!     // ...
 //! }
 //!
@@ -37,6 +37,7 @@
 //! }
 //! ```
 
+#![feature(doc_auto_cfg)]
 #![cfg_attr(feature = "no_std", no_std)]
 
 #[cfg(all(
@@ -59,6 +60,7 @@ pub mod bare_closure;
 pub mod cc;
 pub mod jit_alloc;
 
+/// Common imports required to use `closure-ffi`.
 pub mod prelude {
     pub use super::bare_closure::{BareFn, BareFnMut, BareFnOnce};
     pub use super::cc;

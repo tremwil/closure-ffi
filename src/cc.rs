@@ -4,12 +4,14 @@
 pub use closure_ffi_proc_macros::hrtb_cc as hrtb;
 
 macro_rules! cc_impl {
-    ($ty_name:ident, $lit_name:literal) => {
+    ($ty_name:ident, $lit_name:literal $(,$cfg:meta)?) => {
         #[doc = "Marker type representing the"]
         #[doc = $lit_name]
         #[doc = "calling convention."]
         #[derive(Debug, Clone, Copy, Default)]
+        $(#[cfg(any($cfg, doc))])?
         pub struct $ty_name;
+        $(#[cfg($cfg)])?
         $crate::thunk::cc_thunk_impl!($ty_name, $lit_name);
     };
 }
@@ -18,23 +20,32 @@ cc_impl!(C, "C");
 
 cc_impl!(System, "system");
 
-#[cfg(all(not(windows), target_arch = "x86_64"))]
-cc_impl!(Sysv64, "sysv64");
+cc_impl!(Sysv64, "sysv64", all(not(windows), target_arch = "x86_64"));
 
-#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-cc_impl!(Aapcs, "aapcs");
+cc_impl!(
+    Aapcs,
+    "aapcs",
+    any(target_arch = "arm", target_arch = "aarch64")
+);
 
-#[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-cc_impl!(Fastcall, "fastcall");
+cc_impl!(
+    Fastcall,
+    "fastcall",
+    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+);
 
-#[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-cc_impl!(Stdcall, "stdcall");
+cc_impl!(
+    Stdcall,
+    "stdcall",
+    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+);
 
-#[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-cc_impl!(Cdecl, "cdecl");
+cc_impl!(
+    Cdecl,
+    "cdecl",
+    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+);
 
-#[cfg(all(windows, target_arch = "x86"))]
-cc_impl!(Thiscall, "thiscall");
+cc_impl!(Thiscall, "thiscall", all(windows, target_arch = "x86"));
 
-#[cfg(all(windows, target_arch = "x86_64"))]
-cc_impl!(Win64, "win64");
+cc_impl!(Win64, "win64", all(windows, target_arch = "x86_64"));

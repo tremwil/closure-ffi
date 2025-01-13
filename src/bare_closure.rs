@@ -13,7 +13,8 @@ use crate::{
 };
 
 macro_rules! cc_shorthand {
-    ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal) => {
+    ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal $(,$cfg:meta)?) => {
+        $(#[cfg(any($cfg, doc))])?
         #[doc = "Create a bare function thunk using the "]
         #[doc = $cc_name]
         #[doc = "calling convention for `fun`."]
@@ -146,26 +147,61 @@ macro_rules! bare_closure_impl {
 
             cc_shorthand!(new_system, $trait_ident, cc::System, "system");
 
-            #[cfg(all(not(windows), target_arch = "x86_64"))]
-            cc_shorthand!(new_sysv64, $trait_ident, cc::Sysv64, "sysv64");
+            cc_shorthand!(
+                new_sysv64,
+                $trait_ident,
+                cc::Sysv64,
+                "sysv64",
+                all(not(windows), target_arch = "x86_64")
+            );
 
-            #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-            cc_shorthand!(new_aapcs, $trait_ident, cc::Aapcs, "aapcs");
+            cc_shorthand!(
+                new_aapcs,
+                $trait_ident,
+                cc::Aapcs,
+                "aapcs",
+                any(doc, target_arch = "arm", target_arch = "aarch64")
+            );
 
-            #[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-            cc_shorthand!(new_fastcall, $trait_ident, cc::Fastcall, "fastcall");
+            cc_shorthand!(
+                new_fastcall,
+                $trait_ident,
+                cc::Fastcall,
+                "fastcall",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
 
-            #[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-            cc_shorthand!(new_stdcall, $trait_ident, cc::Stdcall, "stdcall");
+            cc_shorthand!(
+                new_stdcall,
+                $trait_ident,
+                cc::Stdcall,
+                "stdcall",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
 
-            #[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-            cc_shorthand!(new_cdecl, $trait_ident, cc::Cdecl, "cdecl");
+            cc_shorthand!(
+                new_cdecl,
+                $trait_ident,
+                cc::Cdecl,
+                "cdecl",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
 
-            #[cfg(all(windows, target_arch = "x86"))]
-            cc_shorthand!(new_thiscall, $trait_ident, cc::Thiscall, "thiscall");
+            cc_shorthand!(
+                new_thiscall,
+                $trait_ident,
+                cc::Thiscall,
+                "thiscall",
+                all(windows, target_arch = "x86")
+            );
 
-            #[cfg(all(windows, target_arch = "x86_64"))]
-            cc_shorthand!(new_win64, $trait_ident, cc::Win64, "win64");
+            cc_shorthand!(
+                new_win64,
+                $trait_ident,
+                cc::Win64,
+                "win64",
+                all(windows, target_arch = "x86_64")
+            );
         }
     };
 }

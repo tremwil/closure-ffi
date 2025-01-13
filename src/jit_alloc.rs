@@ -6,6 +6,8 @@
 //!
 //! See the [`JitAlloc`] trait for more information.
 
+/// Anonymous error that may be returned by [`JitAlloc`] implementations when [`JitAlloc::alloc`] or
+/// [`JitAlloc::release`] fail.
 #[derive(Debug)]
 pub struct JitAllocError;
 
