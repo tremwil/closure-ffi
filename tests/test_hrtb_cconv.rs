@@ -3,7 +3,7 @@ use closure_ffi::{cc, BareFn};
 #[test]
 fn test_hrtb() {
     let bare_closure = BareFn::new(
-        cc::hrtb!(#[with(<T>)] extern "C" fn(&Option<T>) -> Option<&T>),
+        cc::hrtb!(#[with(<T>)] for<'a> extern "C" fn(&'a Option<T>) -> Option<&'a T>),
         |opt| opt.as_ref(),
     );
 
