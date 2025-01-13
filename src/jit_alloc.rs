@@ -70,7 +70,7 @@ impl<'a, J: JitAlloc> JitAlloc for &'a J {
     }
 }
 
-#[cfg(any(test, feature = "bundled-jit-alloc"))]
+#[cfg(any(test, feature = "bundled_jit_alloc"))]
 mod bundled_jit_alloc {
     use jit_allocator::JitAllocator;
 
@@ -240,5 +240,5 @@ mod bundled_jit_alloc {
     #[cfg(not(feature = "no_std"))]
     pub use thread_jit_alloc::*;
 }
-#[cfg(any(test, feature = "bundled-jit-alloc"))]
+#[cfg(any(test, feature = "bundled_jit_alloc"))]
 pub use bundled_jit_alloc::*;

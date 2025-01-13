@@ -3,7 +3,7 @@ use std::str::FromStr;
 use proc_macro::TokenStream;
 use proc_macro2 as pm2;
 use quote::quote;
-use syn::{parse_macro_input, spanned::Spanned, visit_mut::VisitMut};
+use syn::{parse_macro_input, visit_mut::VisitMut};
 
 // the Parse impl for syn::Generics ignores the where clause. This expects
 // it right after the generic parameters.

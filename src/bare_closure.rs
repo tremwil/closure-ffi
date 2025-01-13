@@ -126,7 +126,7 @@ macro_rules! bare_closure_impl {
             }
         }
 
-        #[cfg(any(test, feature = "bundled-jit-alloc"))]
+        #[cfg(any(test, feature = "bundled_jit_alloc"))]
         impl<B: Copy, F> $ty_name<B, F, jit_alloc::GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
