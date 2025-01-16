@@ -31,10 +31,11 @@ unsafe extern "C" fn ffi_unregister_callback(cb: unsafe extern "C" fn(u32)) {
 }
 // We want to keep track of sum of callback arguments without using statics. This is where
 // closure-ffi comes in:
-let mut sum = 0;
-let wrapped = BareFnMut::new(cc::C, move |x: u32| {
+let mut sum = 0; // Non-'static closures work too!
+let wrapped = BareFnMut::new(cc::C, |x: u32| {
     sum += x;
 });
+
 // Safety: Here, we assert that the foreign API won't use the callback
 // in ways that break Rust's safety rules. Namely:
 // - The exclusivity of the FnMut's borrow is respected.
@@ -45,3 +46,6 @@ unsafe {
     // Do something that triggers the callback...
     ffi_unregister_callback(wrapped.bare());
 }
+
+println!("{sum}");
+```
