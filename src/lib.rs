@@ -52,6 +52,7 @@
 //! ```
 
 #![feature(doc_auto_cfg)]
+#![feature(doc_cfg)]
 #![cfg_attr(feature = "no_std", no_std)]
 
 #[cfg(all(
@@ -76,9 +77,13 @@ pub mod jit_alloc;
 
 /// Common imports required to use `closure-ffi`.
 pub mod prelude {
+    #[doc(inline)]
     pub use super::bare_closure::{BareFn, BareFnMut, BareFnOnce};
+    #[doc(inline)]
     pub use super::cc;
+    #[doc(inline)]
     pub use super::jit_alloc::{JitAlloc, JitAllocError};
 }
 
+#[doc(inline)]
 pub use prelude::*;

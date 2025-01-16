@@ -5,6 +5,9 @@
 use alloc::Box;
 use core::{marker::PhantomData, mem::ManuallyDrop, pin::Pin};
 
+#[cfg(feature = "bundled_jit_alloc")]
+use jit_alloc::GlobalJitAlloc;
+
 use crate::{
     arch::{create_thunk, ThunkInfo},
     cc,
@@ -40,6 +43,21 @@ macro_rules! bare_closure_impl {
         $fn_trait_doc:literal,
         $safety_doc:literal
     ) => {
+        #[cfg(feature = "bundled_jit_alloc")]
+        #[doc(cfg(all()))]
+        /// Wrapper around a
+        #[doc = $fn_trait_doc]
+        /// closure which exposes a bare function thunk that can invoke it without
+        /// additional arguments.
+        #[allow(dead_code)]
+        pub struct $ty_name<B: Copy, F, A: JitAlloc = GlobalJitAlloc> {
+            thunk_info: ThunkInfo,
+            jit_alloc: A,
+            closure: Pin<Box<F>>,
+            phantom: PhantomData<B>,
+        }
+
+        #[cfg(not(feature = "bundled_jit_alloc"))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
@@ -51,6 +69,11 @@ macro_rules! bare_closure_impl {
             closure: Pin<Box<F>>,
             phantom: PhantomData<B>,
         }
+
+        // SAFETY: F and A can be moved to other threads
+        unsafe impl<B: Copy, F: Send, A: JitAlloc + Send> Send for $ty_name<B, F, A> {}
+        // SAFETY: F and A can borrowed by other threads
+        unsafe impl<B: Copy, F: Sync, A: JitAlloc + Sync> Sync for $ty_name<B, F, A> {}
 
         impl<B: Copy, F, A: JitAlloc> $ty_name<B, F, A> {
             /// Wraps `fun`, producing a bare function with calling convention
@@ -131,7 +154,7 @@ macro_rules! bare_closure_impl {
         }
 
         #[cfg(any(test, feature = "bundled_jit_alloc"))]
-        impl<B: Copy, F> $ty_name<B, F, jit_alloc::GlobalJitAlloc> {
+        impl<B: Copy, F> $ty_name<B, F, GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
             /// The W^X memory required is allocated using the global JIT allocator.
