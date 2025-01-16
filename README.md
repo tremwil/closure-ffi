@@ -12,7 +12,7 @@ The crate comes with the following feature flags:
   still required.
 - `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator`](https://crates.io/crates/jit-allocator)
   crate. This is enabled by default.
-- `hrtb_macro`: Provides the [`cc::hrtb`] proc macro which is necessary for creating bare
+- `hrtb_macro`: Provides the `cc::hrtb` proc macro which is necessary for creating bare
   functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>`
   statements).
 - `full`: Enables all features except for `no_std`.
@@ -21,7 +21,7 @@ The crate comes with the following feature flags:
 Passing a closure to a C API taking a contextless function pointer:
 ```rust
 use closure_ffi::{cc, BareFnMut};
-// Imagine we have an foerign C API for reigstering and unregistering some callback function.
+// Imagine we have an foreign C API for reigstering and unregistering some callback function.
 // Notably, the API does not let the user provide a context object to the callback.
 unsafe extern "C" fn ffi_register_callback(cb: unsafe extern "C" fn(u32)) {
     // ...

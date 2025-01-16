@@ -23,7 +23,7 @@
 //! ```
 //! use closure_ffi::{cc, BareFnMut};
 //!
-//! // Imagine we have an foerign C API for reigstering and unregistering some callback function.
+//! // Imagine we have an foreign C API for reigstering and unregistering some callback function.
 //! // Notably, the API does not let the user provide a context object to the callback.
 //! unsafe extern "C" fn ffi_register_callback(cb: unsafe extern "C" fn(u32)) {
 //!     // ...
