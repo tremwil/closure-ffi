@@ -10,6 +10,9 @@ use crate::{
     thunk::{FnMutThunk, FnOnceThunk, FnThunk},
 };
 
+#[cfg(feature = "hrtb_macro")]
+pub use closure_ffi_proc_macros::bare_dyn;
+
 macro_rules! cc_shorthand {
     ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal) => {
         #[doc = "Create a bare function thunk using the "]

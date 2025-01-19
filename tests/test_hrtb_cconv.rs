@@ -1,4 +1,6 @@
-use closure_ffi::{cc, BareFn};
+use closure_ffi::{bare_closure::bare_dyn, cc, BareFn};
+
+type X = bare_dyn!("C", Send + Sync + for<'a> FnMut(&'a u32) -> &'a usize);
 
 #[test]
 fn test_hrtb() {

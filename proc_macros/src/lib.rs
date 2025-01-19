@@ -3,7 +3,7 @@ use std::str::FromStr;
 use proc_macro::TokenStream;
 use proc_macro2 as pm2;
 use quote::quote;
-use syn::{parse_macro_input, visit_mut::VisitMut};
+use syn::{parse_macro_input, spanned::Spanned as _, visit_mut::VisitMut};
 
 // the Parse impl for syn::Generics ignores the where clause. This expects
 // it right after the generic parameters.
@@ -252,11 +252,11 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
             unsafe impl #impl_generics #thunk_trait<_CustomThunk, #bare_fn>
             for (_CustomThunk, #f_ident) #where_clause
             {
-                const #const_ident: *const u8 = {
+                const #const_ident: *const ::std::primitive::u8 = {
                     #thunk_sig {
                         #body
                     }
-                    #thunk_ident::<#(#sig_tys),*> as *const u8
+                    #thunk_ident::<#(#sig_tys),*> as *const ::std::primitive::u8
                 };
             }
         }
@@ -264,7 +264,7 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
 
     quote! {{
         #(#attrs)*
-        #[derive(Debug, Clone, Copy)]
+        #[derive(::core::fmt::Debug, ::core::clone::Clone, ::core::marker::Copy)]
         struct _CustomThunk;
 
         #(#impls)*
@@ -274,56 +274,74 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
     .into()
 }
 
-// struct BareDynInput {
-//     abi: syn::Ident,
-//     fn_trait: syn::TypeTraitObject,
-//     allocator: Option<syn::Type>,
-//     type_ident: &'static str,
-// }
+struct BareDynInput {
+    abi: syn::LitStr,
+    dyn_trait: syn::TypeTraitObject,
+    bare_fn: pm2::TokenStream,
+    allocator: Option<syn::Type>,
+    type_path: pm2::TokenStream,
+}
 
-// impl syn::parse::Parse for BareDynInput {
-//     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-//         let abi = input.parse()?;
-//         let _ = input.parse::<syn::Token![,]>()?;
-//         let fn_trait: syn::TypeTraitObject = input.parse()?;
+impl syn::parse::Parse for BareDynInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let abi = input.parse()?;
+        let _ = input.parse::<syn::Token![,]>()?;
+        let dyn_trait: syn::TypeTraitObject = input.parse()?;
 
-//         let type_ident = fn_trait
-//             .bounds
-//             .iter()
-//             .find_map(|bound| match bound {
-//                 syn::TypeParamBound::Trait(tb) => {
-//                     tb.path.segments.last().and_then(|seg| match seg.ident.to_string().as_str() {
-//                         "FnOnce" => Some("::closure_ffi::bare_closure::BareFn"),
-//                         "FnMut" => Some("::closure_ffi::bare_closure::BareFnMut"),
-//                         "Fn" => Some("::closure_ffi::bare_closure::BareFn"),
-//                         _ => None,
-//                     })
-//                 }
-//                 _ => None,
-//             })
-//             .ok_or_else(|| {
-//                 syn::Error::new(
-//                     fn_trait.span(),
-//                     "Not a function trait, expected Fn, FnMut or FnOnce",
-//                 )
-//             })?;
+        let (bare_fn_tokens, type_path) = dyn_trait
+            .bounds
+            .iter()
+            .find_map(|bound| match bound {
+                syn::TypeParamBound::Trait(tb) => {
+                    tb.path.segments.last().and_then(|seg| match &seg.arguments {
+                        syn::PathArguments::Parenthesized(args) => {
+                            let bound_lt = &tb.lifetimes;
+                            let params = &args.inputs;
+                            let ret = &args.output;
+                            let bare_fn_tokens = quote! {
+                                #bound_lt unsafe extern #abi fn(#params) #ret
+                            };
+                            Some((
+                                bare_fn_tokens,
+                                match seg.ident.to_string().as_str() {
+                                    "FnOnce" => quote! { ::closure_ffi::BareFnOnce },
+                                    "FnMut" => quote! { ::closure_ffi::BareFnMut },
+                                    "Fn" => quote! { ::closure_ffi::BareFn },
+                                    _ => return None,
+                                },
+                            ))
+                        }
+                        _ => None,
+                    })
+                }
+                _ => None,
+            })
+            .ok_or_else(|| syn::Error::new(dyn_trait.span(), "Expected a function trait"))?;
 
-//         let allocator = input
-//             .parse::<Option<syn::Token![,]>>()
-//             .and_then(|comma| comma.map(|_| input.parse().map(|x| Some(x))).unwrap_or(Ok(None)))?;
+        let allocator = input
+            .parse::<Option<syn::Token![,]>>()
+            .and_then(|comma| comma.map(|_| input.parse().map(|x| Some(x))).unwrap_or(Ok(None)))?;
 
-//         Ok(Self {
-//             abi,
-//             fn_trait,
-//             allocator,
-//             type_ident,
-//         })
-//     }
-// }
+        Ok(Self {
+            abi,
+            dyn_trait,
+            bare_fn: bare_fn_tokens,
+            allocator,
+            type_path,
+        })
+    }
+}
 
-// #[proc_macro]
-// pub fn bare_dyn(tokens: TokenStream) -> TokenStream {
-//     let input = syn::parse_macro_input!(tokens as BareDynInput);
+#[proc_macro]
+pub fn bare_dyn(tokens: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(tokens as BareDynInput);
+    let type_path = &input.type_path;
+    let bare_fn = &input.bare_fn;
+    let dyn_trait = &input.dyn_trait;
+    let allocator = &input.allocator;
 
-//     quote! {}.into()
-// }
+    quote! {
+        #type_path::<#bare_fn, #dyn_trait, #allocator>
+    }
+    .into()
+}
