@@ -286,10 +286,11 @@ impl syn::parse::Parse for BareDynInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let abi = input.parse()?;
         let _ = input.parse::<syn::Token![,]>()?;
-        let dyn_trait: syn::TypeTraitObject = input.parse()?;
+        let dyn_bounds = 
+            syn::punctuated::Punctuated::<syn::TypeParamBound, syn::Token![+]>
+            ::parse_separated_nonempty(input)?;
 
-        let (bare_fn_tokens, type_path) = dyn_trait
-            .bounds
+        let (bare_fn_tokens, type_path) = dyn_bounds
             .iter()
             .find_map(|bound| match bound {
                 syn::TypeParamBound::Trait(tb) => {
@@ -316,7 +317,7 @@ impl syn::parse::Parse for BareDynInput {
                 }
                 _ => None,
             })
-            .ok_or_else(|| syn::Error::new(dyn_trait.span(), "Expected a function trait"))?;
+            .ok_or_else(|| syn::Error::new(dyn_bounds.span(), "Expected a function trait"))?;
 
         let allocator = input
             .parse::<Option<syn::Token![,]>>()
@@ -324,7 +325,10 @@ impl syn::parse::Parse for BareDynInput {
 
         Ok(Self {
             abi,
-            dyn_trait,
+            dyn_trait: syn::TypeTraitObject {
+                dyn_token: Some(syn::Token![dyn](pm2::Span::call_site())),
+                bounds: dyn_bounds
+            },
             bare_fn: bare_fn_tokens,
             allocator,
             type_path,
@@ -341,7 +345,7 @@ pub fn bare_dyn(tokens: TokenStream) -> TokenStream {
     let allocator = &input.allocator;
 
     quote! {
-        #type_path::<#bare_fn, #dyn_trait, #allocator>
+        #type_path::<#bare_fn, ::closure_ffi::bare_closure::Box<#dyn_trait>, #allocator>
     }
     .into()
 }

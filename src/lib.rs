@@ -1,5 +1,5 @@
-#![feature(doc_auto_cfg)]
-#![feature(doc_cfg)]
+#![cfg_attr(doc, feature(doc_auto_cfg))]
+#![cfg_attr(doc, feature(doc_cfg))]
 #![cfg_attr(feature = "no_std", no_std)]
 #![doc = include_str!("../README.md")]
 
@@ -31,6 +31,10 @@ pub mod prelude {
     pub use super::cc;
     #[doc(inline)]
     pub use super::jit_alloc::{JitAlloc, JitAllocError};
+
+    #[cfg(feature = "hrtb_macro")]
+    #[doc(inline)]
+    pub use super::bare_closure::bare_dyn;
 }
 
 #[doc(inline)]

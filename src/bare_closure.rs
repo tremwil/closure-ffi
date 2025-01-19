@@ -1,8 +1,6 @@
 //! Provides the [`BareFnOnce`], [`BareFnMut`] and [`BareFn`] wrapper types which allow closures to
 //! be called through context-free unsafe bare functions.
-
-#[cfg(feature = "no_std")]
-use alloc::Box;
+//!
 use core::{marker::PhantomData, mem::ManuallyDrop, pin::Pin};
 
 #[cfg(feature = "bundled_jit_alloc")]
@@ -14,6 +12,13 @@ use crate::{
     jit_alloc::{self, JitAlloc, JitAllocError},
     thunk::{FnMutThunk, FnOnceThunk, FnThunk},
 };
+
+// Provide a re-export of Box that proc macros can use no matter the no_std state
+#[doc(hidden)]
+#[cfg(feature = "no_std")]
+pub use alloc::Box;
+#[doc(hidden)]
+pub use std::boxed::Box;
 
 #[cfg(feature = "hrtb_macro")]
 pub use closure_ffi_proc_macros::bare_dyn;
@@ -47,7 +52,7 @@ macro_rules! bare_closure_impl {
         $safety_doc:literal
     ) => {
         #[cfg(feature = "bundled_jit_alloc")]
-        #[doc(cfg(all()))]
+        #[cfg_attr(doc, doc(cfg(all())))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
