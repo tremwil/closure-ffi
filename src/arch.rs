@@ -1,3 +1,8 @@
+//! Architecture-specific code used to implement the code generation making
+//! closure-ffi possible.
+//!
+//! While parts of this module are public for macro reasons, they should not be used directly.
+
 use crate::jit_alloc::{JitAlloc, JitAllocError, ProtectJitAccess};
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -115,8 +120,8 @@ pub(crate) struct ThunkInfo {
 /// # Safety
 /// Given a closure of type `F`, the following must hold:
 /// - `thunk_template` is a pointer obtained via the associated const of the
-///     `crate::thunk::Fn*Thunk<C, B>` trait implemented on (C, F). Namely, it is a bare function
-///     that first invokes [`_thunk_asm`] to obtain the closure pointer, then invokes it.
+///   `crate::thunk::Fn*Thunk<C, B>` trait implemented on (C, F). Namely, it is a bare function that
+///   first invokes [`_thunk_asm`] to obtain the closure pointer, then invokes it.
 /// - `closure_ptr` is a valid pointer to an initialized instance of `F`.
 pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     thunk_template: *const u8,

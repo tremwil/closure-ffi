@@ -1,7 +1,12 @@
-use core::{marker::PhantomData, mem::ManuallyDrop, pin::Pin};
+//! Provides the [`BareFnOnce`], [`BareFnMut`] and [`BareFn`] wrapper types which allow closures to
+//! be called through context-free unsafe bare functions.
 
 #[cfg(feature = "no_std")]
 use alloc::Box;
+use core::{marker::PhantomData, mem::ManuallyDrop, pin::Pin};
+
+#[cfg(feature = "bundled_jit_alloc")]
+use jit_alloc::GlobalJitAlloc;
 
 use crate::{
     arch::{create_thunk, ThunkInfo},
@@ -14,7 +19,8 @@ use crate::{
 pub use closure_ffi_proc_macros::bare_dyn;
 
 macro_rules! cc_shorthand {
-    ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal) => {
+    ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal $(,$cfg:meta)?) => {
+        $(#[cfg(any($cfg, doc))])?
         #[doc = "Create a bare function thunk using the "]
         #[doc = $cc_name]
         #[doc = "calling convention for `fun`."]
@@ -40,6 +46,21 @@ macro_rules! bare_closure_impl {
         $fn_trait_doc:literal,
         $safety_doc:literal
     ) => {
+        #[cfg(feature = "bundled_jit_alloc")]
+        #[doc(cfg(all()))]
+        /// Wrapper around a
+        #[doc = $fn_trait_doc]
+        /// closure which exposes a bare function thunk that can invoke it without
+        /// additional arguments.
+        #[allow(dead_code)]
+        pub struct $ty_name<B: Copy, F, A: JitAlloc = GlobalJitAlloc> {
+            thunk_info: ThunkInfo,
+            jit_alloc: A,
+            closure: Pin<Box<F>>,
+            phantom: PhantomData<B>,
+        }
+
+        #[cfg(not(feature = "bundled_jit_alloc"))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
@@ -51,6 +72,11 @@ macro_rules! bare_closure_impl {
             closure: Pin<Box<F>>,
             phantom: PhantomData<B>,
         }
+
+        // SAFETY: F and A can be moved to other threads
+        unsafe impl<B: Copy, F: Send, A: JitAlloc + Send> Send for $ty_name<B, F, A> {}
+        // SAFETY: F and A can borrowed by other threads
+        unsafe impl<B: Copy, F: Sync, A: JitAlloc + Sync> Sync for $ty_name<B, F, A> {}
 
         impl<B: Copy, F, A: JitAlloc> $ty_name<B, F, A> {
             /// Wraps `fun`, producing a bare function with calling convention
@@ -100,7 +126,8 @@ macro_rules! bare_closure_impl {
                 unsafe { std::mem::transmute_copy(&self.thunk_info.thunk) }
             }
 
-            /// Leak the underlying closure, returning the unsafe bare function pointer that invokes it.
+            /// Leak the underlying closure, returning the unsafe bare function pointer that invokes
+            /// it.
             ///
             /// `self` must be `'static` for this method to be called.
             ///
@@ -130,7 +157,7 @@ macro_rules! bare_closure_impl {
         }
 
         #[cfg(any(test, feature = "bundled_jit_alloc"))]
-        impl<B: Copy, F> $ty_name<B, F, jit_alloc::GlobalJitAlloc> {
+        impl<B: Copy, F> $ty_name<B, F, GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
             /// The W^X memory required is allocated using the global JIT allocator.
@@ -146,26 +173,61 @@ macro_rules! bare_closure_impl {
 
             cc_shorthand!(new_system, $trait_ident, cc::System, "system");
 
-            #[cfg(all(not(windows), target_arch = "x86_64"))]
-            cc_shorthand!(new_sysv64, $trait_ident, cc::Sysv64, "sysv64");
+            cc_shorthand!(
+                new_sysv64,
+                $trait_ident,
+                cc::Sysv64,
+                "sysv64",
+                all(not(windows), target_arch = "x86_64")
+            );
 
-            #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-            cc_shorthand!(new_aapcs, $trait_ident, cc::Aapcs, "aapcs");
+            cc_shorthand!(
+                new_aapcs,
+                $trait_ident,
+                cc::Aapcs,
+                "aapcs",
+                any(doc, target_arch = "arm", target_arch = "aarch64")
+            );
 
-            #[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-            cc_shorthand!(new_fastcall, $trait_ident, cc::Fastcall, "fastcall");
+            cc_shorthand!(
+                new_fastcall,
+                $trait_ident,
+                cc::Fastcall,
+                "fastcall",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
 
-            #[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-            cc_shorthand!(new_stdcall, $trait_ident, cc::Stdcall, "stdcall");
+            cc_shorthand!(
+                new_stdcall,
+                $trait_ident,
+                cc::Stdcall,
+                "stdcall",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
 
-            #[cfg(all(windows, any(target_arch = "x86_64", target_arch = "x86")))]
-            cc_shorthand!(new_cdecl, $trait_ident, cc::Cdecl, "cdecl");
+            cc_shorthand!(
+                new_cdecl,
+                $trait_ident,
+                cc::Cdecl,
+                "cdecl",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
 
-            #[cfg(all(windows, target_arch = "x86"))]
-            cc_shorthand!(new_thiscall, $trait_ident, cc::Thiscall, "thiscall");
+            cc_shorthand!(
+                new_thiscall,
+                $trait_ident,
+                cc::Thiscall,
+                "thiscall",
+                all(windows, target_arch = "x86")
+            );
 
-            #[cfg(all(windows, target_arch = "x86_64"))]
-            cc_shorthand!(new_win64, $trait_ident, cc::Win64, "win64");
+            cc_shorthand!(
+                new_win64,
+                $trait_ident,
+                cc::Win64,
+                "win64",
+                all(windows, target_arch = "x86_64")
+            );
         }
     };
 }

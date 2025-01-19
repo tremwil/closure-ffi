@@ -1,3 +1,13 @@
+//! Abstractions around allocators that provide dual-mapped memory with XOR protection rules (one RW
+//! view and one RX view) suitable for emitting code at runtime.
+//!
+//! Meant to be an abstraction over the `jit-allocator` crate's API so that it can be swapped with
+//! user-provided allocators.
+//!
+//! See the [`JitAlloc`] trait for more information.
+
+/// Anonymous error that may be returned by [`JitAlloc`] implementations when [`JitAlloc::alloc`] or
+/// [`JitAlloc::release`] fail.
 #[derive(Debug)]
 pub struct JitAllocError;
 
@@ -157,6 +167,8 @@ mod bundled_jit_alloc {
     ///
     /// This is currently implemented as a ZST deffering to a static [`jit_allocator::JitAllocator`]
     /// behind a [`std::sync::Mutex`] (or a [`spin::Mutex`] under no_std).
+    ///
+    /// [`spin::Mutex`]: https://docs.rs/spin/0.9/spin/type.Mutex.html
     #[derive(Default, Clone, Copy)]
     pub struct GlobalJitAlloc;
 
