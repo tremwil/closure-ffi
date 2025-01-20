@@ -12,9 +12,10 @@ The crate comes with the following feature flags:
   still required.
 - `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator`](https://crates.io/crates/jit-allocator)
   crate. This is enabled by default.
-- `hrtb_macro`: Provides the `cc::hrtb` proc macro which is necessary for creating bare
+- `proc_macros`: Provides the `cc::hrtb` proc macro which is necessary for creating bare
   functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>`
-  statements).
+  statements), as well as the `bare_dyn` proc macro for writing `BareFn*` types of boxed 
+  closures (i.e. `Box<dyn Fn()>`) more concisely. 
 - `full`: Enables all features except for `no_std`.
 
 # Examples
