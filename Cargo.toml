@@ -24,8 +24,8 @@ repository.workspace = true
 default = [ "bundled_jit_alloc" ]
 no_std = [ "spin" ]
 bundled_jit_alloc = [ "jit-allocator" ]
-hrtb_macro = [ "closure-ffi-proc-macros" ]
-full = [ "bundled_jit_alloc", "hrtb_macro" ]
+proc_macros = [ "closure-ffi-proc-macros" ]
+full = [ "bundled_jit_alloc", "proc_macros" ]
 
 [dependencies]
 closure-ffi-proc-macros = { path = "proc_macros", version = "0.1.1", optional = true }

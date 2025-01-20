@@ -25,16 +25,15 @@ pub mod jit_alloc;
 
 /// Common imports required to use `closure-ffi`.
 pub mod prelude {
+    #[cfg(feature = "proc_macros")]
+    #[doc(inline)]
+    pub use super::bare_closure::bare_dyn;
     #[doc(inline)]
     pub use super::bare_closure::{BareFn, BareFnMut, BareFnOnce};
     #[doc(inline)]
     pub use super::cc;
     #[doc(inline)]
     pub use super::jit_alloc::{JitAlloc, JitAllocError};
-
-    #[cfg(feature = "hrtb_macro")]
-    #[doc(inline)]
-    pub use super::bare_closure::bare_dyn;
 }
 
 #[doc(inline)]

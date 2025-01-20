@@ -1,8 +1,16 @@
 //! Provides the [`BareFnOnce`], [`BareFnMut`] and [`BareFn`] wrapper types which allow closures to
 //! be called through context-free unsafe bare functions.
-//!
-use core::{marker::PhantomData, mem::ManuallyDrop, pin::Pin};
 
+// Provide a re-export of Box that proc macros can use no matter the no_std state
+#[doc(hidden)]
+#[cfg(feature = "no_std")]
+pub use alloc::Box;
+use core::{marker::PhantomData, mem::ManuallyDrop};
+#[doc(hidden)]
+pub use std::boxed::Box;
+
+#[cfg(feature = "proc_macros")]
+pub use closure_ffi_proc_macros::bare_dyn;
 #[cfg(feature = "bundled_jit_alloc")]
 use jit_alloc::GlobalJitAlloc;
 
@@ -12,16 +20,6 @@ use crate::{
     jit_alloc::{self, JitAlloc, JitAllocError},
     thunk::{FnMutThunk, FnOnceThunk, FnThunk},
 };
-
-// Provide a re-export of Box that proc macros can use no matter the no_std state
-#[doc(hidden)]
-#[cfg(feature = "no_std")]
-pub use alloc::Box;
-#[doc(hidden)]
-pub use std::boxed::Box;
-
-#[cfg(feature = "hrtb_macro")]
-pub use closure_ffi_proc_macros::bare_dyn;
 
 macro_rules! cc_shorthand {
     ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal $(,$cfg:meta)?) => {
@@ -61,7 +59,10 @@ macro_rules! bare_closure_impl {
         pub struct $ty_name<B: Copy, F, A: JitAlloc = GlobalJitAlloc> {
             thunk_info: ThunkInfo,
             jit_alloc: A,
-            closure: Pin<Box<F>>,
+            // We can't directly own the closure, even through an UnsafeCell.
+            // Otherwise, holding a reference to a BareFnMut while the bare function is
+            // being called would be UB! So we reclaim the pointer in the Drop impl.
+            closure: *mut F,
             phantom: PhantomData<B>,
         }
 
@@ -74,7 +75,7 @@ macro_rules! bare_closure_impl {
         pub struct $ty_name<B: Copy, F, A: JitAlloc> {
             thunk_info: ThunkInfo,
             jit_alloc: A,
-            closure: Pin<Box<F>>,
+            closure: *mut F,
             phantom: PhantomData<B>,
         }
 
@@ -97,17 +98,13 @@ macro_rules! bare_closure_impl {
             where
                 (CC, F): $trait_ident<CC, B>,
             {
-                let closure = Box::pin(fun);
+                let closure = Box::into_raw(Box::new(fun));
 
                 // SAFETY:
                 // - thunk_template pointer obtained from the correct source
                 // - `closure` is a valid pointer to `fun`
                 let thunk_info = unsafe {
-                    create_thunk(
-                        <(CC, F)>::$thunk_template,
-                        closure.as_ref().get_ref() as *const F as *const _,
-                        &jit_alloc,
-                    )?
+                    create_thunk(<(CC, F)>::$thunk_template, closure as *const _, &jit_alloc)?
                 };
                 Ok(Self {
                     thunk_info,
@@ -155,9 +152,17 @@ macro_rules! bare_closure_impl {
             fn drop(&mut self) {
                 // Don't panic on allocator failures for safety reasons
                 // SAFETY:
-                // alloc_base is RX memory previously allocated by jit_alloc which has not been
+                // - The caller of `bare()` promised not to call through the thunk after
+                // the lifetime of self expires
+                // - alloc_base is RX memory previously allocated by jit_alloc which has not been
                 // freed yet
                 unsafe { self.jit_alloc.release(self.thunk_info.alloc_base).ok() };
+
+                // Free the closure
+                // SAFETY:
+                // - The caller of `bare()` promised not to call through the thunk after
+                // the lifetime of self expires, so no borrow on closure exists
+                drop(unsafe { Box::from_raw(self.closure) })
             }
         }
 
@@ -261,7 +266,7 @@ bare_closure_impl!(
     FnMutThunk,
     THUNK_TEMPLATE_MUT,
     cfg(all()),
-    &mut Self,
+    &Self,
     "[`FnMut`]",
     "- A borrow induced by a previous call is still active.\n
 - The closure is not `Sync`, if calling from a different thread than the current one."
@@ -297,7 +302,7 @@ mod tests {
         use super::BareFnMut;
 
         let mut value = "0".to_owned();
-        let mut bare_closure = BareFnMut::new_c(|n: usize| {
+        let bare_closure = BareFnMut::new_c(|n: usize| {
             value += &n.to_string();
             value.clone()
         });
