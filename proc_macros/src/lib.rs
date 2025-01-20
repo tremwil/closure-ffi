@@ -33,12 +33,14 @@ impl syn::parse::Parse for MacroInput {
         for attr in all_attrs {
             if !attr.path().is_ident("with") {
                 attrs.push(attr);
-            } else if generics.is_some() {
+            }
+            else if generics.is_some() {
                 return Err(syn::Error::new_spanned(
                     attr.path().get_ident(),
                     "with attribute is already present",
                 ));
-            } else {
+            }
+            else {
                 let meta_list = attr.meta.require_list()?;
                 generics = Some(meta_list.parse_args::<GenericsWithWhere>()?.0);
             }
@@ -127,7 +129,8 @@ impl<F: FnMut(&mut syn::Lifetime)> syn::visit_mut::VisitMut for ReplaceLt<F> {
 /// for higher-kinded bare functions when instantiating bare closure wrappers.
 ///
 /// For example, the following evaluates to an expression which can be passed to `BareFn*::new`
-/// to create an adapter for the closure of type *exactly* `unsafe extern "C" for<'a> fn(&'a str) -> &'a u32`:
+/// to create an adapter for the closure of type *exactly* `unsafe extern "C" for<'a> fn(&'a str) ->
+/// &'a u32`:
 ///
 /// ```ignore
 /// hrtb_cc!(extern "C" for<'a> fn(&'a str) -> &'a u32)
@@ -141,26 +144,26 @@ impl<F: FnMut(&mut syn::Lifetime)> syn::visit_mut::VisitMut for ReplaceLt<F> {
 /// ```ignore
 /// hrtb_cc!(#[with(<T>)] extern "C" for<'a> fn(&'a str) -> &'a T)
 /// ```
-/// 
+///
 /// This hack is necessary as there is no way to blanket implement the `FnThunk` traits for all
 /// lifetime associations. For this reason, the following won't compile:
 ///
 /// ```ignore
 /// use closure_ffi::BareFn;
 ///
-/// fn take_higher_rank_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {} 
-/// 
+/// fn take_higher_rank_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {}
+///
 /// let bare_closure = BareFn::new_c(|opt: &Option<u32>| opt.as_ref());
 /// take_higher_rank_fn(bare_closure.bare());
 /// ```
-/// 
+///
 /// However, using the output of this macro as the calling convention, we can get it to work:
-/// 
+///
 /// ```ignore
 /// use closure_ffi::BareFn;
 ///
-/// fn take_higher_rank_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {} 
-/// 
+/// fn take_higher_rank_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {}
+///
 /// let bare_closure = BareFn::new(
 ///     hrtb_cc!(extern "C" fn(&Option<u32>) -> Option<&u32>),
 ///     |opt| opt.as_ref()
@@ -308,7 +311,7 @@ impl syn::parse::Parse for BareDynInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let abi: syn::LitStr = input.parse()?;
         let _ = input.parse::<syn::Token![,]>()?;
-        let dyn_bounds = 
+        let dyn_bounds =
             syn::punctuated::Punctuated::<syn::TypeParamBound, syn::Token![+]>
             ::parse_separated_nonempty(input)?;
 
@@ -343,12 +346,12 @@ impl syn::parse::Parse for BareDynInput {
 
         let allocator = input
             .parse::<Option<syn::Token![,]>>()
-            .and_then(|comma| comma.map(|_| input.parse().map(|x| Some(x))).unwrap_or(Ok(None)))?;
+            .and_then(|comma| comma.map(|_| input.parse().map(Some)).unwrap_or(Ok(None)))?;
 
         Ok(Self {
             dyn_trait: syn::TypeTraitObject {
                 dyn_token: Some(syn::Token![dyn](pm2::Span::call_site())),
-                bounds: dyn_bounds
+                bounds: dyn_bounds,
             },
             bare_fn: bare_fn_tokens,
             allocator,
@@ -358,20 +361,20 @@ impl syn::parse::Parse for BareDynInput {
 }
 
 /// Shorthand for a `BareFn*` type taking a boxed closure.
-/// 
+///
 /// Essentially,
 /// ```ignore
 /// type MyBareFnMut = bare_dyn!("C", FnMut(&u32) -> u32 + Send);
 /// ```
-/// becomes 
+/// becomes
 /// ```ignore
 /// type MyBareFnMut = BareFnMut<
 ///     unsafe extern "C" fn(&u32) -> u32,
 ///     Box<dyn FnMut(&u32) -> u32 + Send>
 /// >;
 /// ```
-/// 
-/// If desired, the JIT allocator used by the `BareFn*` closure wrapper can also be specified 
+///
+/// If desired, the JIT allocator used by the `BareFn*` closure wrapper can also be specified
 /// by passing it as a third parameter.
 #[proc_macro]
 pub fn bare_dyn(tokens: TokenStream) -> TokenStream {
