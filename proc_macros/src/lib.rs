@@ -275,7 +275,6 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
 }
 
 struct BareDynInput {
-    abi: syn::LitStr,
     dyn_trait: syn::TypeTraitObject,
     bare_fn: pm2::TokenStream,
     allocator: Option<syn::Type>,
@@ -284,7 +283,7 @@ struct BareDynInput {
 
 impl syn::parse::Parse for BareDynInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let abi = input.parse()?;
+        let abi: syn::LitStr = input.parse()?;
         let _ = input.parse::<syn::Token![,]>()?;
         let dyn_bounds = 
             syn::punctuated::Punctuated::<syn::TypeParamBound, syn::Token![+]>
@@ -324,7 +323,6 @@ impl syn::parse::Parse for BareDynInput {
             .and_then(|comma| comma.map(|_| input.parse().map(|x| Some(x))).unwrap_or(Ok(None)))?;
 
         Ok(Self {
-            abi,
             dyn_trait: syn::TypeTraitObject {
                 dyn_token: Some(syn::Token![dyn](pm2::Span::call_site())),
                 bounds: dyn_bounds
@@ -336,6 +334,22 @@ impl syn::parse::Parse for BareDynInput {
     }
 }
 
+/// Shorthand for a `BareFn*` type taking a boxed closure.
+/// 
+/// Essentially,
+/// ```no_run
+/// type MyBareFnMut = bare_dyn!("C", FnMut(&u32) -> u32 + Send);
+/// ```
+/// becomes 
+/// ```no_run
+/// type MyBareFnMut = BareFnMut<
+///     unsafe extern "C" fn(&u32) -> u32,
+///     Box<dyn FnMut(&u32) -> u32 + Send>
+/// >;
+/// ```
+/// 
+/// If desired, the JIT allocator used by the `BareFn*` closure wrapper can also be specified 
+/// by passing it as a third parameter.
 #[proc_macro]
 pub fn bare_dyn(tokens: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(tokens as BareDynInput);
