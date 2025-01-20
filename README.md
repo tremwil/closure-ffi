@@ -48,5 +48,6 @@ unsafe {
     ffi_unregister_callback(wrapped.bare());
 }
 
+drop(wrapped);
 println!("{sum}");
 ```
