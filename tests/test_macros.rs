@@ -1,4 +1,12 @@
-use closure_ffi::{bare_dyn, cc, BareFn};
+use closure_ffi::{bare_dyn, cc, BareFn, BareFnMut};
+
+#[test]
+fn test_bare_dyn() {
+    let bare_closure: bare_dyn!("system", FnMut(u32) -> u32 + Send + Sync) =
+        BareFnMut::new_system(Box::new(|x| 2 * x));
+
+    assert_eq!(unsafe { bare_closure.bare()(42) }, 84);
+}
 
 #[test]
 fn test_hrtb() {
