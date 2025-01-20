@@ -22,16 +22,3 @@ fn test_hrtb() {
 
     do_test(bare_closure.bare());
 }
-
-/// Ensure that cc::hrtb is actually required for [`test_hrtb`] to compile.
-///
-/// ```compile_fail
-/// use closure_ffi::BareFn;
-///
-/// let bare_closure = BareFn::new_c(|opt: &Option<u32>| opt.as_ref());
-///
-/// fn takes_for_lt_bare_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {}
-/// takes_for_lt_bare_fn(bare_closure.bare());
-/// ```
-#[allow(dead_code)]
-fn assert_hrtb_required() {}

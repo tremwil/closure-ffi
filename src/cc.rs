@@ -1,6 +1,7 @@
 //! Defines calling convention marker types for use with `BareFn` variants.
 
 #[cfg(feature = "proc_macros")]
+#[doc(inline)]
 pub use closure_ffi_proc_macros::hrtb_cc as hrtb;
 
 macro_rules! cc_impl {

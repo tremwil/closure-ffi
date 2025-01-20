@@ -10,6 +10,7 @@ use core::{marker::PhantomData, mem::ManuallyDrop};
 pub use std::boxed::Box;
 
 #[cfg(feature = "proc_macros")]
+#[doc(inline)]
 pub use closure_ffi_proc_macros::bare_dyn;
 #[cfg(feature = "bundled_jit_alloc")]
 use jit_alloc::GlobalJitAlloc;
