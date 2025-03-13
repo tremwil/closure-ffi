@@ -1,5 +1,5 @@
-#![cfg_attr(doc, feature(doc_auto_cfg))]
-#![cfg_attr(doc, feature(doc_cfg))]
+#![cfg_attr(feature = "build-docs", feature(doc_auto_cfg))]
+#![cfg_attr(feature = "build-docs", feature(doc_cfg))]
 #![cfg_attr(feature = "no_std", no_std)]
 #![doc = include_str!("../README.md")]
 

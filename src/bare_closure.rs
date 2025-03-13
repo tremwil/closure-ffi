@@ -40,6 +40,24 @@ macro_rules! cc_shorthand {
     };
 }
 
+macro_rules! cc_shorthand_in {
+    ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal $(,$cfg:meta)?) => {
+        $(#[cfg(any($cfg, doc))])?
+        #[doc = "Create a bare function thunk using the "]
+        #[doc = $cc_name]
+        #[doc = "calling convention for `fun`."]
+        ///
+        /// The W^X memory required is allocated using the provided JIT allocator.
+        #[inline]
+        pub fn $fn_name(fun: F, jit_alloc: A) -> Self
+        where
+            ($cc_ty, F): $trait_ident<$cc_ty, B>,
+        {
+            Self::new_in(<$cc_ty>::default(), fun, jit_alloc)
+        }
+    };
+}
+
 macro_rules! bare_closure_impl {
     (
         $ty_name:ident,
@@ -51,7 +69,7 @@ macro_rules! bare_closure_impl {
         $safety_doc:literal
     ) => {
         #[cfg(feature = "bundled_jit_alloc")]
-        #[cfg_attr(doc, doc(cfg(all())))]
+        #[cfg_attr(feature = "build-docs", doc(cfg(all())))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
@@ -89,13 +107,26 @@ macro_rules! bare_closure_impl {
             /// Wraps `fun`, producing a bare function with calling convention
             /// `cconv`.
             ///
-            /// Uses `jit_alloc` to allocate the W^X memory used to create the thunk.
+            /// Uses the provided JIT allocator to allocate the W^X memory used to create the thunk.
             #[allow(unused_variables)]
+            #[deprecated(since = "0.3.0", note = "please use `try_new_in` instead")]
             pub fn with_jit_alloc<CC>(
                 cconv: CC,
                 fun: F,
                 jit_alloc: A,
             ) -> Result<Self, JitAllocError>
+            where
+                (CC, F): $trait_ident<CC, B>,
+            {
+                Self::try_new_in(cconv, fun, jit_alloc)
+            }
+
+            /// Wraps `fun`, producing a bare function with calling convention
+            /// `cconv`.
+            ///
+            /// Uses the provided JIT allocator to allocate the W^X memory used to create the thunk.
+            #[allow(unused_variables)]
+            pub fn try_new_in<CC>(cconv: CC, fun: F, jit_alloc: A) -> Result<Self, JitAllocError>
             where
                 (CC, F): $trait_ident<CC, B>,
             {
@@ -114,6 +145,82 @@ macro_rules! bare_closure_impl {
                     phantom: PhantomData,
                 })
             }
+
+            /// Wraps `fun`, producing a bare function with calling convention
+            /// `cconv`.
+            ///
+            /// Uses `jit_alloc` to allocate the W^X memory used to create the thunk.
+            ///
+            /// # Panics
+            /// If the provided JIT allocator fails to allocate memory. For a non-panicking
+            /// version, see `try_new_in`.
+            #[allow(unused_variables)]
+            pub fn new_in<CC>(cconv: CC, fun: F, jit_alloc: A) -> Self
+            where
+                (CC, F): $trait_ident<CC, B>,
+            {
+                Self::try_new_in(cconv, fun, jit_alloc).unwrap()
+            }
+
+            cc_shorthand_in!(new_c_in, $trait_ident, cc::C, "C");
+
+            cc_shorthand_in!(new_system_in, $trait_ident, cc::System, "system");
+
+            cc_shorthand!(
+                new_sysv64_in,
+                $trait_ident,
+                cc::Sysv64,
+                "sysv64",
+                all(not(windows), target_arch = "x86_64")
+            );
+
+            cc_shorthand_in!(
+                new_aapcs_in,
+                $trait_ident,
+                cc::Aapcs,
+                "aapcs",
+                any(doc, target_arch = "arm", target_arch = "aarch64")
+            );
+
+            cc_shorthand_in!(
+                new_fastcall_in,
+                $trait_ident,
+                cc::Fastcall,
+                "fastcall",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
+
+            cc_shorthand_in!(
+                new_stdcall_in,
+                $trait_ident,
+                cc::Stdcall,
+                "stdcall",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
+
+            cc_shorthand_in!(
+                new_cdecl_in,
+                $trait_ident,
+                cc::Cdecl,
+                "cdecl",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
+
+            cc_shorthand_in!(
+                new_thiscall_in,
+                $trait_ident,
+                cc::Thiscall,
+                "thiscall",
+                all(windows, target_arch = "x86")
+            );
+
+            cc_shorthand_in!(
+                new_win64_in,
+                $trait_ident,
+                cc::Win64,
+                "win64",
+                all(windows, target_arch = "x86_64")
+            );
 
             #[$bare_toggle]
             /// Return a bare function pointer that invokes the underlying closure.
@@ -177,7 +284,7 @@ macro_rules! bare_closure_impl {
             where
                 (CC, F): $trait_ident<CC, B>,
             {
-                Self::with_jit_alloc(cconv, fun, Default::default()).unwrap()
+                Self::new_in(cconv, fun, Default::default())
             }
 
             cc_shorthand!(new_c, $trait_ident, cc::C, "C");
