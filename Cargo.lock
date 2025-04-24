@@ -28,7 +28,7 @@ checksum = "4ae118db0db0e2137671e9b916de8af5d3be65a5fb1ad3a9c7925c38b6644cfb"
 
 [[package]]
 name = "closure-ffi"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "closure-ffi",
  "closure-ffi-proc-macros",
@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi-proc-macros"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "proc-macro2",
  "quote",
