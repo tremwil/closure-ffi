@@ -277,7 +277,7 @@ macro_rules! bare_closure_impl {
             }
         }
 
-        #[cfg(any(test, feature = "bundled_jit_alloc"))]
+        #[cfg(feature = "bundled_jit_alloc")]
         impl<B: Copy, F> $ty_name<B, F, GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
@@ -402,10 +402,20 @@ mod tests {
         use super::BareFnOnce;
 
         let value = "test".to_owned();
-        let bare_closure = BareFnOnce::new_c(move |n: usize| value + &n.to_string());
+        let bare_closure = BareFnOnce::new_c(move |n: usize| {
+            let result = value + &n.to_string();
+            println!("{result}");
+            result
+        });
 
         // bare() not available on `BareFnOnce` yet
         let bare = bare_closure.leak();
+
+        println!("{:016x}", bare as usize);
+        println!("{:02x?}", unsafe {
+            &*(bare as usize as *const [u8; 0x40])
+        });
+
 
         let result = unsafe { bare(5) };
         assert_eq!(&result, "test5");
@@ -422,6 +432,11 @@ mod tests {
         });
 
         let bare = bare_closure.bare();
+
+        println!("{:016x}", bare as usize);
+        println!("{:02x?}", unsafe {
+            &*(bare as usize as *const [u8; 0x40])
+        });
 
         let result = unsafe { bare(1) };
         assert_eq!(&result, "01");
@@ -441,6 +456,11 @@ mod tests {
         });
 
         let bare = bare_closure.bare();
+
+        println!("{:016x}", bare as usize);
+        println!("{:02x?}", unsafe {
+            &*(bare as usize as *const [u8; 0x40])
+        });
 
         let result = unsafe { bare(1) };
         assert_eq!(&result, "01");
