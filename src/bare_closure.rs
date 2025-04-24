@@ -394,6 +394,9 @@ bare_closure_impl!(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "no_std")]
+    use alloc::{borrow::ToOwned, string::ToString};
+
     #[test]
     fn test_fn_once() {
         use super::BareFnOnce;

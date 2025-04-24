@@ -1,3 +1,10 @@
+#![cfg_attr(feature = "no_std", no_std)]
+
+#[cfg(feature = "no_std")]
+extern crate alloc;
+#[cfg(feature = "no_std")]
+use alloc::boxed::Box;
+
 use closure_ffi::{bare_dyn, cc, BareFn, BareFnMut};
 
 #[test]
