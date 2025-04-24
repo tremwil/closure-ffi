@@ -16,6 +16,8 @@ pub use closure_ffi_proc_macros::bare_dyn;
 #[cfg(feature = "bundled_jit_alloc")]
 use jit_alloc::GlobalJitAlloc;
 
+// jit_alloc::self is not used when bundled_jit_alloc is disabled
+#[allow(unused_imports)]
 use crate::{
     arch::{create_thunk, ThunkInfo},
     cc,
@@ -180,7 +182,7 @@ macro_rules! bare_closure_impl {
                 $trait_ident,
                 cc::Aapcs,
                 "aapcs",
-                any(doc, target_arch = "arm", target_arch = "aarch64")
+                any(doc, target_arch = "arm")
             );
 
             cc_shorthand_in!(
@@ -305,7 +307,7 @@ macro_rules! bare_closure_impl {
                 $trait_ident,
                 cc::Aapcs,
                 "aapcs",
-                any(doc, target_arch = "arm", target_arch = "aarch64")
+                any(doc, target_arch = "arm")
             );
 
             cc_shorthand!(

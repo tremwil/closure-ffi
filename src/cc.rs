@@ -23,11 +23,7 @@ cc_impl!(System, "system");
 
 cc_impl!(Sysv64, "sysv64", all(not(windows), target_arch = "x86_64"));
 
-cc_impl!(
-    Aapcs,
-    "aapcs",
-    any(target_arch = "arm", target_arch = "aarch64")
-);
+cc_impl!(Aapcs, "aapcs", target_arch = "arm");
 
 cc_impl!(
     Fastcall,
