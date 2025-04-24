@@ -278,11 +278,11 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
             unsafe impl #impl_generics #thunk_trait<_CustomThunk, #bare_fn>
             for (_CustomThunk, #f_ident) #where_clause
             {
-                const #const_ident: *const ::std::primitive::u8 = {
+                const #const_ident: *const ::core::primitive::u8 = {
                     #thunk_sig {
                         #body
                     }
-                    #thunk_ident::<#(#sig_tys),*> as *const ::std::primitive::u8
+                    #thunk_ident::<#(#sig_tys),*> as *const ::core::primitive::u8
                 };
             }
         }
