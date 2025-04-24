@@ -4,9 +4,10 @@
 // Provide a re-export of Box that proc macros can use no matter the no_std state
 #[doc(hidden)]
 #[cfg(feature = "no_std")]
-pub use alloc::Box;
+pub use alloc::boxed::Box;
 use core::{marker::PhantomData, mem::ManuallyDrop};
 #[doc(hidden)]
+#[cfg(not(feature = "no_std"))]
 pub use std::boxed::Box;
 
 #[cfg(feature = "proc_macros")]
@@ -166,7 +167,7 @@ macro_rules! bare_closure_impl {
 
             cc_shorthand_in!(new_system_in, $trait_ident, cc::System, "system");
 
-            cc_shorthand!(
+            cc_shorthand_in!(
                 new_sysv64_in,
                 $trait_ident,
                 cc::Sysv64,
@@ -233,7 +234,7 @@ macro_rules! bare_closure_impl {
             #[inline]
             pub fn bare(self: $bare_receiver) -> B {
                 // SAFETY: B is a bare function pointer
-                unsafe { std::mem::transmute_copy(&self.thunk_info.thunk) }
+                unsafe { core::mem::transmute_copy(&self.thunk_info.thunk) }
             }
 
             /// Leak the underlying closure, returning the unsafe bare function pointer that invokes
@@ -252,7 +253,7 @@ macro_rules! bare_closure_impl {
             {
                 let no_drop = ManuallyDrop::new(self);
                 // SAFETY: B is a bare function pointer
-                unsafe { std::mem::transmute_copy(&no_drop.thunk_info.thunk) }
+                unsafe { core::mem::transmute_copy(&no_drop.thunk_info.thunk) }
             }
         }
 
