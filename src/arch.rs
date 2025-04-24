@@ -95,6 +95,7 @@ macro_rules! _thunk_asm {
             "ldr {cl_addr}, 1f",
             "ldr {jmp_addr}, 2f",
             "b {jmp_addr}",
+            ".align 4",
             "1:",
             ".4byte {cl_magic}",
             "2:",
@@ -153,7 +154,7 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     }
     #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     {
-        const PTR_SIZE: usize = std::mem::size_of::<usize>();
+        const PTR_SIZE: usize = size_of::<usize>();
 
         let mut offset = thunk_template.align_offset(PTR_SIZE);
         while thunk_template.add(offset).cast::<usize>().read() != CLOSURE_ADDR_MAGIC {
@@ -170,7 +171,7 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
         J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
 
         core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
-        rw.add(offset).cast::<*mut ()>().write(closure_ptr);
+        rw.add(offset).cast::<*const ()>().write(closure_ptr);
 
         J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
         J::flush_instruction_cache(thunk_rx, thunk_size);
