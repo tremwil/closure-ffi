@@ -86,7 +86,7 @@ macro_rules! _thunk_asm {
 const THUNK_ASM_EXTRA_BYTES: usize = 16;
 
 /// Internal. Do not use.
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", not(thumb_mode)))]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! _thunk_asm {
@@ -94,8 +94,8 @@ macro_rules! _thunk_asm {
         ::core::arch::asm!(
             "ldr {cl_addr}, 1f",
             "ldr {jmp_addr}, 2f",
-            "b {jmp_addr}",
-            ".align 4",
+            "bx {jmp_addr}",
+            ".align 2",
             "1:",
             ".4byte {cl_magic}",
             "2:",
@@ -108,6 +108,30 @@ macro_rules! _thunk_asm {
         );
     };
 }
+/// Internal. Do not use.
+#[cfg(all(target_arch = "arm", thumb_mode))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! _thunk_asm {
+    ($closure_ptr:ident) => {
+        ::core::arch::asm!(
+            "ldr {cl_addr}, 1f",
+            "ldr {jmp_addr}, 2f",
+            "bx {jmp_addr}",
+            ".align 2",
+            "1:",
+            ".4byte {cl_magic}",
+            "2:",
+            ".4byte 3f+1",
+            "3:",
+            cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
+            cl_addr = out(reg) $closure_ptr,
+            jmp_addr = out(reg) _,
+            options(nostack)
+        );
+    };
+}
+
 #[cfg(target_arch = "arm")]
 const THUNK_ASM_EXTRA_BYTES: usize = 8;
 
