@@ -31,11 +31,11 @@ build-docs = []
 [dependencies]
 closure-ffi-proc-macros = { path = "proc_macros", version = "0.2", optional = true }
 jit-allocator = {version = "0.2.8", optional = true }
-spin = { version = "0.9", optional = true }
+spin = { version = "0.10", optional = true }
 seq-macro = "0.3"
 
 [dev-dependencies]
-spin = { version = "0.9" }
+spin = { version = "0.10" }
 closure-ffi = { path = ".", features = ["full"] }
 
 [package.metadata.docs.rs]
