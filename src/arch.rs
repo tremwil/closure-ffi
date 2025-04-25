@@ -180,6 +180,10 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     {
         const PTR_SIZE: usize = size_of::<usize>();
 
+        // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
+        #[cfg(thumb_mode)]
+        let thunk_template = thunk_template.map_addr(|a| a & !1);
+
         let mut offset = thunk_template.align_offset(PTR_SIZE);
         while thunk_template.add(offset).cast::<usize>().read() != CLOSURE_ADDR_MAGIC {
             offset += PTR_SIZE;
@@ -199,6 +203,10 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
 
         J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
         J::flush_instruction_cache(thunk_rx, thunk_size);
+
+        // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
+        #[cfg(thumb_mode)]
+        let thunk_rx = thunk_rx.map_addr(|a| a | 1);
 
         Ok(ThunkInfo {
             alloc_base: rx,
