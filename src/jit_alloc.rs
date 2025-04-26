@@ -94,6 +94,22 @@ mod bundled_jit_alloc {
         }
     }
 
+    fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
+        #[cfg(all(target_arch = "arm", target_os = "linux"))]
+        unsafe {
+            const __ARM_NR_CACHEFLUSH: i32 = 0x0f0002;
+            libc::syscall(
+                __ARM_NR_CACHEFLUSH,
+                rx_ptr as usize as u64,
+                (rx_ptr as usize + size) as u64,
+                0,
+            );
+            return;
+        }
+        #[allow(unreachable_code)]
+        jit_allocator::flush_instruction_cache(rx_ptr, size);
+    }
+
     impl JitAlloc for core::cell::RefCell<JitAllocator> {
         fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
             self.borrow_mut().alloc(size).map_err(|_| JitAllocError)
@@ -105,7 +121,7 @@ mod bundled_jit_alloc {
 
         #[inline(always)]
         unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
-            jit_allocator::flush_instruction_cache(rx_ptr, size);
+            flush_instruction_cache(rx_ptr, size);
         }
 
         #[inline(always)]
@@ -126,7 +142,7 @@ mod bundled_jit_alloc {
 
         #[inline(always)]
         unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
-            jit_allocator::flush_instruction_cache(rx_ptr, size);
+            flush_instruction_cache(rx_ptr, size);
         }
 
         #[inline(always)]
@@ -147,7 +163,7 @@ mod bundled_jit_alloc {
 
         #[inline(always)]
         unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
-            jit_allocator::flush_instruction_cache(rx_ptr, size);
+            flush_instruction_cache(rx_ptr, size);
         }
 
         #[inline(always)]
@@ -195,7 +211,7 @@ mod bundled_jit_alloc {
 
         #[inline(always)]
         unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
-            jit_allocator::flush_instruction_cache(rx_ptr, size);
+            flush_instruction_cache(rx_ptr, size);
         }
 
         #[inline(always)]
@@ -239,7 +255,7 @@ mod bundled_jit_alloc {
 
             #[inline(always)]
             unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
-                jit_allocator::flush_instruction_cache(rx_ptr, size);
+                flush_instruction_cache(rx_ptr, size);
             }
 
             #[inline(always)]
