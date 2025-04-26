@@ -135,6 +135,7 @@ macro_rules! _thunk_asm {
 #[cfg(target_arch = "arm")]
 const THUNK_ASM_EXTRA_BYTES: usize = 8;
 
+#[derive(Debug)]
 pub(crate) struct ThunkInfo {
     pub alloc_base: *const u8,
     pub thunk: *const (),
