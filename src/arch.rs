@@ -69,7 +69,7 @@ macro_rules! _thunk_asm {
             "ldr {cl_addr}, 1f",
             "ldr {jmp_addr}, 2f",
             "br {jmp_addr}",
-            ".align 8",
+            ".align 3",
             "1:",
             ".8byte {cl_magic}",
             "2:",
