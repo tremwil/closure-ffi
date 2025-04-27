@@ -277,7 +277,7 @@ macro_rules! bare_closure_impl {
             }
         }
 
-        #[cfg(any(test, feature = "bundled_jit_alloc"))]
+        #[cfg(feature = "bundled_jit_alloc")]
         impl<B: Copy, F> $ty_name<B, F, GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
@@ -391,61 +391,3 @@ bare_closure_impl!(
     "[`Fn`]",
     "- The closure is not `Sync`, if calling from a different thread than the current one."
 );
-
-#[cfg(test)]
-mod tests {
-    #[cfg(feature = "no_std")]
-    use alloc::{borrow::ToOwned, string::ToString};
-
-    #[test]
-    fn test_fn_once() {
-        use super::BareFnOnce;
-
-        let value = "test".to_owned();
-        let bare_closure = BareFnOnce::new_c(move |n: usize| value + &n.to_string());
-
-        // bare() not available on `BareFnOnce` yet
-        let bare = bare_closure.leak();
-
-        let result = unsafe { bare(5) };
-        assert_eq!(&result, "test5");
-    }
-
-    #[test]
-    fn test_fn_mut() {
-        use super::BareFnMut;
-
-        let mut value = "0".to_owned();
-        let bare_closure = BareFnMut::new_c(|n: usize| {
-            value += &n.to_string();
-            value.clone()
-        });
-
-        let bare = bare_closure.bare();
-
-        let result = unsafe { bare(1) };
-        assert_eq!(&result, "01");
-
-        let result = unsafe { bare(2) };
-        assert_eq!(&result, "012");
-    }
-
-    #[test]
-    fn test_fn() {
-        use super::BareFn;
-
-        let cell = core::cell::RefCell::new("0".to_owned());
-        let bare_closure = BareFn::new_c(|n: usize| {
-            *cell.borrow_mut() += &n.to_string();
-            cell.borrow().clone()
-        });
-
-        let bare = bare_closure.bare();
-
-        let result = unsafe { bare(1) };
-        assert_eq!(&result, "01");
-
-        let result = unsafe { bare(2) };
-        assert_eq!(&result, "012");
-    }
-}

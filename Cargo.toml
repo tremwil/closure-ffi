@@ -11,7 +11,7 @@ repository = "https://github.com/tremwil/closure-ffi"
 
 [package]
 name = "closure-ffi"
-version = "0.3.2"
+version = "0.4.0"
 description = "FFI utility for creating bare function pointers that invoke a closure"
 edition.workspace = true
 authors.workspace = true
@@ -29,14 +29,18 @@ full = [ "bundled_jit_alloc", "proc_macros" ]
 build-docs = []
 
 [dependencies]
-closure-ffi-proc-macros = { path = "proc_macros", version = "0.2.1", optional = true }
+closure-ffi-proc-macros = { path = "proc_macros", version = "0.3.0", optional = true }
 jit-allocator = {version = "0.2.8", optional = true }
 spin = { version = "0.10", optional = true }
 seq-macro = "0.3"
 
+[target.'cfg(all(target_arch = "arm", target_os = "linux"))'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
-spin = { version = "0.10" }
-closure-ffi = { path = ".", features = ["full"] }
+spin = "0.10"
+region = "3.0.2"
+clear-cache = "0.1.1"
 
 [package.metadata.docs.rs]
 features = ["full", "build-docs"]

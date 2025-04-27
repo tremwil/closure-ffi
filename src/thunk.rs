@@ -22,7 +22,7 @@ macro_rules! thunk_impl_triple {
                 unsafe extern $cconv_lit fn thunk<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *mut F;
                     $crate::arch::_thunk_asm!(closure_ptr);
-                    closure_ptr.read()($($args),*)
+                    $crate::thunk::_never_inline(|| closure_ptr.read()($($args),*))
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
@@ -34,7 +34,7 @@ macro_rules! thunk_impl_triple {
                 unsafe extern $cconv_lit fn thunk<F: FnMut($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *mut F;
                     $crate::arch::_thunk_asm!(closure_ptr);
-                    (&mut *closure_ptr)($($args),*)
+                    $crate::thunk::_never_inline(|| (&mut *closure_ptr)($($args),*))
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
@@ -46,7 +46,7 @@ macro_rules! thunk_impl_triple {
                 unsafe extern $cconv_lit fn thunk<F: Fn($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *const F;
                     $crate::arch::_thunk_asm!(closure_ptr);
-                    (&*closure_ptr)($($args),*)
+                    $crate::thunk::_never_inline(|| (&*closure_ptr)($($args),*))
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
@@ -65,6 +65,18 @@ macro_rules! cc_thunk_impl {
             )*
         });
     };
+}
+
+// Necessary to prevent the compiler inlining the closure call into the
+// compiler thunk function, which may bring in some PC-relative static constant loads
+// in the prologue
+#[doc(hidden)]
+#[inline(never)]
+pub fn _never_inline<R>(f: impl FnOnce() -> R) -> R {
+    // Block is not declared as pure, so may have side-effects
+    // necessary to make inline(never) actually work
+    unsafe { core::arch::asm!("") }
+    f()
 }
 
 pub(crate) use cc_thunk_impl;

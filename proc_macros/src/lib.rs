@@ -226,7 +226,7 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
             body: quote! {
                 let closure_ptr: *mut #f_ident;
                 ::closure_ffi::arch::_thunk_asm!(closure_ptr);
-                closure_ptr.read()(#(#arg_idents),*)
+                ::closure_ffi::thunk::_never_inline(|| closure_ptr.read()(#(#arg_idents),*))
             },
         },
         ImplDetails {
@@ -236,7 +236,7 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
             body: quote! {
                 let closure_ptr: *mut #f_ident;
                 ::closure_ffi::arch::_thunk_asm!(closure_ptr);
-                (&mut *closure_ptr)(#(#arg_idents),*)
+                ::closure_ffi::thunk::_never_inline(|| (&mut *closure_ptr)(#(#arg_idents),*))
             },
         },
         ImplDetails {
@@ -246,7 +246,7 @@ pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
             body: quote! {
                 let closure_ptr: *const #f_ident;
                 ::closure_ffi::arch::_thunk_asm!(closure_ptr);
-                (&*closure_ptr)(#(#arg_idents),*)
+                ::closure_ffi::thunk::_never_inline(|| (&*closure_ptr)(#(#arg_idents),*))
             },
         },
     ];

@@ -69,7 +69,7 @@ macro_rules! _thunk_asm {
             "ldr {cl_addr}, 1f",
             "ldr {jmp_addr}, 2f",
             "br {jmp_addr}",
-            ".align 8",
+            ".align 3",
             "1:",
             ".8byte {cl_magic}",
             "2:",
@@ -86,7 +86,7 @@ macro_rules! _thunk_asm {
 const THUNK_ASM_EXTRA_BYTES: usize = 16;
 
 /// Internal. Do not use.
-#[cfg(target_arch = "arm")]
+#[cfg(all(target_arch = "arm", not(target_feature = "thumb-mode")))]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! _thunk_asm {
@@ -94,8 +94,8 @@ macro_rules! _thunk_asm {
         ::core::arch::asm!(
             "ldr {cl_addr}, 1f",
             "ldr {jmp_addr}, 2f",
-            "b {jmp_addr}",
-            ".align 4",
+            "bx {jmp_addr}",
+            ".align 2",
             "1:",
             ".4byte {cl_magic}",
             "2:",
@@ -108,9 +108,34 @@ macro_rules! _thunk_asm {
         );
     };
 }
+/// Internal. Do not use.
+#[cfg(all(target_arch = "arm", target_feature = "thumb-mode"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! _thunk_asm {
+    ($closure_ptr:ident) => {
+        ::core::arch::asm!(
+            "ldr {cl_addr}, 1f",
+            "ldr {jmp_addr}, 2f",
+            "bx {jmp_addr}",
+            ".align 2",
+            "1:",
+            ".4byte {cl_magic}",
+            "2:",
+            ".4byte 3f+1",
+            "3:",
+            cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
+            cl_addr = out(reg) $closure_ptr,
+            jmp_addr = out(reg) _,
+            options(nostack)
+        );
+    };
+}
+
 #[cfg(target_arch = "arm")]
 const THUNK_ASM_EXTRA_BYTES: usize = 8;
 
+#[derive(Debug)]
 pub(crate) struct ThunkInfo {
     pub alloc_base: *const u8,
     pub thunk: *const (),
@@ -156,6 +181,10 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     {
         const PTR_SIZE: usize = size_of::<usize>();
 
+        // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
+        #[cfg(target_feature = "thumb-mode")]
+        let thunk_template = thunk_template.map_addr(|a| a & !1);
+
         let mut offset = thunk_template.align_offset(PTR_SIZE);
         while thunk_template.add(offset).cast::<usize>().read() != CLOSURE_ADDR_MAGIC {
             offset += PTR_SIZE;
@@ -175,6 +204,10 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
 
         J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
         J::flush_instruction_cache(thunk_rx, thunk_size);
+
+        // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
+        #[cfg(target_feature = "thumb-mode")]
+        let thunk_rx = thunk_rx.map_addr(|a| a | 1);
 
         Ok(ThunkInfo {
             alloc_base: rx,
