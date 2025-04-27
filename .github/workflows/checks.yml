@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
-      - run: cargo +nightly fmt check
+      - run: cargo +nightly fmt --check
       - run: cargo check --workspace
 
   build_and_test:
