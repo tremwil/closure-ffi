@@ -39,7 +39,6 @@ libc = "0.2"
 
 [dev-dependencies]
 spin = "0.10"
-closure-ffi = { path = ".", features = ["full"] }
 region = "3.0.2"
 clear-cache = "0.1.1"
 
