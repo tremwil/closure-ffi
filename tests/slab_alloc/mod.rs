@@ -1,4 +1,4 @@
-use core::{ptr::null_mut, sync::atomic::AtomicUsize};
+use core::sync::atomic::AtomicUsize;
 
 use closure_ffi::{JitAlloc, JitAllocError};
 use region::{Allocation, Protection};
