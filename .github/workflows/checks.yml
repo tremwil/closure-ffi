@@ -1,0 +1,32 @@
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo +nightly fmt check
+      - run: cargo check --workspace
+
+  build_and_test:
+    strategy:
+      matrix:
+        profile:
+          - debug
+          - release
+        runner:
+          - ubuntu-latest # x86_64_unknown_linux_gnu
+          - windows-latest # x86_64_pc_windows_msvc
+          - macos-latest # aarch64 Darwin
+          - ubuntu-24.04-arm # aarch64_unknown_linux_gnu
+          - windows-11-arm # aarch64_pc_windows_msvc
+          - macos-13 # x86_64 Darwin
+    
+    needs: lint # don't bother running tests if cargo check doesn't pass
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo build --profile ${{ matrix.profile }}
+      - run: cargo test --profile ${{ matrix.profile }}
