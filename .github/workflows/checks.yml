@@ -19,7 +19,7 @@ jobs:
         features:
           - --no-default-features
           - --no-default-features -F no_std
-          - -F full no_std
+          - -F full,no_std
 
     runs-on: ubuntu-latest
     steps:
