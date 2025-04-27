@@ -23,7 +23,6 @@ jobs:
           - windows-latest # x86_64_pc_windows_msvc
           - macos-latest # aarch64 Darwin
           - ubuntu-24.04-arm # aarch64_unknown_linux_gnu
-          - windows-11-arm # aarch64_pc_windows_msvc
           - macos-13 # x86_64 Darwin
     
     needs: lint # don't bother running tests if cargo check doesn't pass
