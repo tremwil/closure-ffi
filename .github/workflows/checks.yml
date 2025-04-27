@@ -4,12 +4,26 @@ on:
 
 jobs:
   lint:
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - --no-default-features
+          - --no-default-features -F no_std
+          - -F full no_std
+        runner:
+          - ubuntu-latest # x86_64-unknown-linux-gnu
+          - windows-latest # x86_64-pc-windows-msvc
+          - macos-latest # aarch64-apple-darwin
+          - ubuntu-24.04-arm # aarch64-unknown-linux-gnu
+          - macos-13 # x86_64-apple-darwin
+
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
-      - run: cargo +nightly fmt --check
-      - run: cargo check --workspace
+      - run: cargo +nightly fmt --check ${{ matrix.features }}
+      - run: cargo check --workspace ${{ matrix.features }}
 
   build_and_test:
     strategy:
@@ -19,15 +33,31 @@ jobs:
           - dev
           - release
         runner:
-          - ubuntu-latest # x86_64_unknown_linux_gnu
-          - windows-latest # x86_64_pc_windows_msvc
-          - macos-latest # aarch64 Darwin
-          - ubuntu-24.04-arm # aarch64_unknown_linux_gnu
-          - macos-13 # x86_64 Darwin
+          - ubuntu-latest # x86_64-unknown-linux-gnu
+          - windows-latest # x86_64-pc-windows-msvc
+          - macos-latest # aarch64-apple-darwin
+          - ubuntu-24.04-arm # aarch64-unknown-linux-gnu
+          - macos-13 # x86_64-apple-darwin
     
     needs: lint # don't bother running tests if cargo check doesn't pass
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - run: cargo build --profile ${{ matrix.profile }}
-      - run: cargo test --profile ${{ matrix.profile }}
+      - run: cargo build --profile ${{ matrix.profile }} -F full
+      - run: cargo test --profile ${{ matrix.profile }} -F full
+
+  build_and_test_i686_windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - dev
+          - release
+    runs-on: windows-latest
+
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add i686-pc-windows-msvc
+      - run: cargo build --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
+      - run: cargo test --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
