@@ -47,7 +47,6 @@ name = "closure-ffi"
 version = "0.4.0"
 dependencies = [
  "clear-cache",
- "closure-ffi",
  "closure-ffi-proc-macros",
  "jit-allocator",
  "libc",
