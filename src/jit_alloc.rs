@@ -80,6 +80,44 @@ impl<J: JitAlloc> JitAlloc for &J {
     }
 }
 
+#[cfg(not(feature = "no_std"))]
+impl<J: JitAlloc> JitAlloc for std::sync::LazyLock<J> {
+    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
+        self.deref().alloc(size)
+    }
+
+    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
+        self.deref().release(rx_ptr)
+    }
+
+    unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
+        J::flush_instruction_cache(rx_ptr, size);
+    }
+
+    unsafe fn protect_jit_memory(ptr: *const u8, size: usize, access: ProtectJitAccess) {
+        J::protect_jit_memory(ptr, size, access);
+    }
+}
+
+#[cfg(feature = "no_std")]
+impl<J: JitAlloc> JitAlloc for spin::Lazy<J> {
+    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
+        self.deref().alloc(size)
+    }
+
+    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
+        self.deref().release(rx_ptr)
+    }
+
+    unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
+        J::flush_instruction_cache(rx_ptr, size);
+    }
+
+    unsafe fn protect_jit_memory(ptr: *const u8, size: usize, access: ProtectJitAccess) {
+        J::protect_jit_memory(ptr, size, access);
+    }
+}
+
 #[cfg(feature = "bundled_jit_alloc")]
 mod bundled_jit_alloc {
     use jit_allocator::JitAllocator;
@@ -267,5 +305,7 @@ mod bundled_jit_alloc {
     #[cfg(not(feature = "no_std"))]
     pub use thread_jit_alloc::*;
 }
+use core::ops::Deref;
+
 #[cfg(feature = "bundled_jit_alloc")]
 pub use bundled_jit_alloc::*;
