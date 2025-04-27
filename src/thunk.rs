@@ -75,9 +75,7 @@ macro_rules! cc_thunk_impl {
 pub fn _never_inline<R>(f: impl FnOnce() -> R) -> R {
     // Block is not declared as pure, so may have side-effects
     // necessary to make inline(never) actually work
-    unsafe {
-        core::arch::asm!("")
-    }
+    unsafe { core::arch::asm!("") }
     f()
 }
 
