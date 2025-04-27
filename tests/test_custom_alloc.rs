@@ -1,3 +1,6 @@
+// MacOS doesn't support creating RWE memory
+#![cfg(not(target_os = "macos"))]
+
 mod slab_alloc;
 
 use closure_ffi::{BareFn, BareFnMut, BareFnOnce};
