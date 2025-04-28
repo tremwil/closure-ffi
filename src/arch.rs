@@ -44,8 +44,8 @@ macro_rules! _thunk_asm {
 macro_rules! _thunk_asm {
     ($closure_ptr:ident) => {
         ::core::arch::asm!(
-            "mov {cl_addr}, [rip + 2f]",
-            "jmp [rip + 3f]",
+            "mov {cl_addr}, [eip + 2f]",
+            "jmp [eip + 3f]",
             ".align 4",
             "2:",
             ".4byte {cl_magic}",
