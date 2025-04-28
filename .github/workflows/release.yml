@@ -2,15 +2,31 @@ name: Release
 on:
   push:
     branches: [master]
+  pull_request:
+    branches: [master]
 
 jobs:
+  publish-dry-run:
+    if: github.event_name == 'pull_request'
+    name: cargo publish --dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo publish -p closure-ffi-proc-macros --dry-run
+      - run: cargo publish -p closure-ffi --dry-run
+      - name: Generate release notes
+        run: python ./.github/scripts/release_notes.py
+
   publish:
+    if: github.event_name == 'push'
     name: cargo publish and create release
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Get package version
         id: get_version
         run: echo "version=$(python ./.github/scripts/package_version.py)" >> "$GITHUB_OUTPUT"

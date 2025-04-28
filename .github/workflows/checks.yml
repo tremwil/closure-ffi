@@ -30,18 +30,6 @@ jobs:
       - uses: actions/checkout@v4
       - run: cargo check --workspace ${{ matrix.features }}
 
-  publish-dry-run:
-    if: github.base_ref == 'master'
-    needs: [fmt, check] # don't bother running if cargo check/fmt doesn't pass
-    name: cargo publish --dry-run
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: cargo publish -p closure-ffi-proc-macros --dry-run
-      - run: cargo publish -p closure-ffi --dry-run
-      - name: Generate release notes
-        run: python ./.github/scripts/release_notes.py
-
   build_and_test:
     strategy:
       fail-fast: false
