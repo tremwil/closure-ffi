@@ -23,7 +23,13 @@ fn test_stateless_fn() {
 #[test]
 fn test_borrow_fn() {
     let array = [0, 5, 10, 15, 20];
-    let bare_closure = BareFn::new_c_in(|n: usize| array[n], &SLAB);
+    let bare_closure = BareFn::new_c_in(
+        |n: usize| {
+            println!("{:08x}", n);
+            array[n]
+        },
+        &SLAB,
+    );
 
     let bare = bare_closure.bare();
     assert_eq!(unsafe { bare(3) }, 15);
