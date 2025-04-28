@@ -45,7 +45,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cargo build --profile ${{ matrix.profile }} -F full
-      - run: cargo test --profile ${{ matrix.profile }} -F full
+
+      - if: ${{ !startsWith(matrix.runner, 'macos') }}
+        run: cargo test --profile ${{ matrix.profile }} -F full
+      
+      # # Need to codesign with `allow_jit` on macos
+      # - if: ${{ startsWith(matrix.runner, 'macos') }}
+      #   run: |
+      #     binaries=$(cargo test ${{ matrix.profile }} -F full --no-run --message-format json | grep -oh '"executable":"[^"]*' | sed 's/"executable":"//')
+      #     codesign -s "test" --entitlements ./tests/macos/entitlements.plist --force $binaries
 
   build_and_test_i686_windows:
     strategy:
@@ -60,5 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup target add i686-pc-windows-msvc
+      # At the moment, bundled_jit_alloc is not supported on i686 windows due to a linker error
+      # in jit-allocator
       - run: cargo build --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
       - run: cargo test --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
