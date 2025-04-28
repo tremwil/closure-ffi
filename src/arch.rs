@@ -50,8 +50,8 @@ macro_rules! _thunk_asm {
             ".align 4",
             ".4byte {cl_magic}",
             "1:",
-            cl_magic = const { CLOSURE_ADDR_MAGIC },
-            cl_addr = out(reg) closure_ptr,
+            cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
+            cl_addr = out(reg) $closure_ptr,
             jmp_addr = out(reg) _,
             options(nostack, att_syntax)
         );
