@@ -11,7 +11,7 @@ repository = "https://github.com/tremwil/closure-ffi"
 
 [package]
 name = "closure-ffi"
-version = "0.4.0"
+version = "0.5.0"
 description = "FFI utility for creating bare function pointers that invoke a closure"
 edition.workspace = true
 authors.workspace = true
