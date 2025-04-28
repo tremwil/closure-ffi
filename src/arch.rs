@@ -86,7 +86,7 @@ macro_rules! _thunk_asm {
 const THUNK_ASM_EXTRA_BYTES: usize = 16;
 
 /// Internal. Do not use.
-#[cfg(all(target_arch = "arm", not(target_feature = "thumb-mode")))]
+#[cfg(all(target_arch = "arm", not(thumb_mode)))]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! _thunk_asm {
@@ -109,7 +109,7 @@ macro_rules! _thunk_asm {
     };
 }
 /// Internal. Do not use.
-#[cfg(all(target_arch = "arm", target_feature = "thumb-mode"))]
+#[cfg(all(target_arch = "arm", thumb_mode))]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! _thunk_asm {
@@ -182,7 +182,7 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
         const PTR_SIZE: usize = size_of::<usize>();
 
         // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
-        #[cfg(target_feature = "thumb-mode")]
+        #[cfg(thumb_mode)]
         let thunk_template = thunk_template.map_addr(|a| a & !1);
 
         let mut offset = thunk_template.align_offset(PTR_SIZE);
@@ -206,7 +206,7 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
         J::flush_instruction_cache(thunk_rx, thunk_size);
 
         // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
-        #[cfg(target_feature = "thumb-mode")]
+        #[cfg(thumb_mode)]
         let thunk_rx = thunk_rx.map_addr(|a| a | 1);
 
         Ok(ThunkInfo {
