@@ -23,20 +23,19 @@ pub const CLOSURE_ADDR_MAGIC: usize = 0x0000DEAD0000DEAD_u64 as usize;
 macro_rules! _thunk_asm {
     ($closure_ptr:ident) => {
         ::core::arch::asm!(
-            "movabsq ${cl_magic}, {cl_addr}",
-            "movabsq $1f, {jmp_addr}",
-            "jmp *{jmp_addr}",
-            ".byte 0xCC", // To account for jmp above being 2 or 3 bytes
-            "1:",
+            "mov {cl_addr}, [rip + 2f]",
+            "jmp [rip + 3f]",
+            ".align 8",
+            "2:",
+            ".8byte {cl_magic}",
+            "3:",
+            ".8byte 0",
             cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
-            jmp_addr = out(reg) _,
-            options(nostack, att_syntax)
+            options(nostack)
         );
     };
 }
-#[cfg(target_arch = "x86_64")]
-const THUNK_ASM_EXTRA_BYTES: usize = 8 + 10 + 3;
 
 /// Internal. Do not use.
 #[cfg(target_arch = "x86")]
@@ -45,19 +44,19 @@ const THUNK_ASM_EXTRA_BYTES: usize = 8 + 10 + 3;
 macro_rules! _thunk_asm {
     ($closure_ptr:ident) => {
         ::core::arch::asm!(
-            "mov ${cl_magic}, {cl_addr}",
-            "mov $1f, {jmp_addr}",
-            "jmp *{jmp_addr}",
-            "1:",
+            "mov {cl_addr}, [rip + 2f]",
+            "jmp [rip + 3f]",
+            ".align 4",
+            "2:",
+            ".4byte {cl_magic}",
+            "3:",
+            ".4byte 0",
             cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
-            jmp_addr = out(reg) _,
-            options(nostack, att_syntax)
+            options(nostack)
         );
     };
 }
-#[cfg(target_arch = "x86")]
-const THUNK_ASM_EXTRA_BYTES: usize = 4 + 5 + 2;
 
 /// Internal. Do not use.
 #[cfg(target_arch = "aarch64")]
@@ -73,8 +72,7 @@ macro_rules! _thunk_asm {
             "1:",
             ".8byte {cl_magic}",
             "2:",
-            ".8byte 3f",
-            "3:",
+            ".8byte 0",
             cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
             jmp_addr = out(reg) _,
@@ -82,8 +80,6 @@ macro_rules! _thunk_asm {
         );
     };
 }
-#[cfg(target_arch = "aarch64")]
-const THUNK_ASM_EXTRA_BYTES: usize = 16;
 
 /// Internal. Do not use.
 #[cfg(all(target_arch = "arm", not(thumb_mode)))]
@@ -99,8 +95,7 @@ macro_rules! _thunk_asm {
             "1:",
             ".4byte {cl_magic}",
             "2:",
-            ".4byte 3f",
-            "3:",
+            ".4byte 0",
             cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
             jmp_addr = out(reg) _,
@@ -122,8 +117,7 @@ macro_rules! _thunk_asm {
             "1:",
             ".4byte {cl_magic}",
             "2:",
-            ".4byte 3f+1",
-            "3:",
+            ".4byte 0",
             cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
             jmp_addr = out(reg) _,
@@ -131,9 +125,6 @@ macro_rules! _thunk_asm {
         );
     };
 }
-
-#[cfg(target_arch = "arm")]
-const THUNK_ASM_EXTRA_BYTES: usize = 8;
 
 #[derive(Debug)]
 pub(crate) struct ThunkInfo {
@@ -154,66 +145,50 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     closure_ptr: *const (),
     jit: &J,
 ) -> Result<ThunkInfo, JitAllocError> {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        let mut offset = 0;
-        while thunk_template.add(offset).cast::<usize>().read_unaligned() != CLOSURE_ADDR_MAGIC {
-            offset += 1;
-        }
+    const PTR_SIZE: usize = size_of::<usize>();
 
-        let thunk_size = offset + THUNK_ASM_EXTRA_BYTES;
-        let (rx, rw) = jit.alloc(thunk_size)?;
+    // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
+    #[cfg(thumb_mode)]
+    let thunk_template = thunk_template.map_addr(|a| a & !1);
 
-        J::protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadWrite);
-
-        core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
-        rw.add(offset).cast::<*const ()>().write_unaligned(closure_ptr);
-
-        J::protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadExecute);
-        J::flush_instruction_cache(rx, thunk_size);
-
-        Ok(ThunkInfo {
-            alloc_base: rx,
-            thunk: rx.cast(),
-        })
+    // Align to pointer size and search for the magic number to be replaced by the
+    // closure address
+    let mut offset = thunk_template.align_offset(PTR_SIZE);
+    while thunk_template.add(offset).cast::<usize>().read() != CLOSURE_ADDR_MAGIC {
+        offset += PTR_SIZE;
     }
-    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-    {
-        const PTR_SIZE: usize = size_of::<usize>();
+    let thunk_size = offset + 2 * PTR_SIZE;
 
-        // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
-        #[cfg(thumb_mode)]
-        let thunk_template = thunk_template.map_addr(|a| a & !1);
+    // Skip initial bytes for proper alignment
+    let (rx, rw) = jit.alloc(thunk_size + PTR_SIZE - 1)?;
+    let align_offset = rw.add(offset).align_offset(PTR_SIZE);
+    let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
 
-        let mut offset = thunk_template.align_offset(PTR_SIZE);
-        while thunk_template.add(offset).cast::<usize>().read() != CLOSURE_ADDR_MAGIC {
-            offset += PTR_SIZE;
-        }
+    J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
 
-        let thunk_size = offset + THUNK_ASM_EXTRA_BYTES;
+    // Copy the prologue + asm block from the compiler-generated thunk
+    core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
+    // Write the closure pointer
+    rw.add(offset).cast::<*const ()>().write(closure_ptr);
 
-        // Skip initial bytes for proper alignment
-        let (rx, rw) = jit.alloc(thunk_size + PTR_SIZE - 1)?;
-        let align_offset = rw.add(offset).align_offset(PTR_SIZE);
-        let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
+    // Write the jump back to the compiler-generated thunk
+    let thunk_return = thunk_template.add(offset + 2 * PTR_SIZE);
+    // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
+    #[cfg(thumb_mode)]
+    let thunk_return = thunk_return.map_addr(|a| a | 1);
+    rw.add(offset + PTR_SIZE).cast::<*const u8>().write(thunk_return);
 
-        J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
+    J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
+    J::flush_instruction_cache(thunk_rx, thunk_size);
 
-        core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
-        rw.add(offset).cast::<*const ()>().write(closure_ptr);
+    // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
+    #[cfg(thumb_mode)]
+    let thunk_rx = thunk_rx.map_addr(|a| a | 1);
 
-        J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
-        J::flush_instruction_cache(thunk_rx, thunk_size);
-
-        // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
-        #[cfg(thumb_mode)]
-        let thunk_rx = thunk_rx.map_addr(|a| a | 1);
-
-        Ok(ThunkInfo {
-            alloc_base: rx,
-            thunk: thunk_rx.cast(),
-        })
-    }
+    Ok(ThunkInfo {
+        alloc_base: rx,
+        thunk: thunk_rx.cast(),
+    })
 }
 
 pub use _thunk_asm;
