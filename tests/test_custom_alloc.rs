@@ -1,6 +1,3 @@
-// MacOS doesn't support creating RWE memory
-#![cfg(not(target_os = "macos"))]
-
 mod slab_alloc;
 
 use closure_ffi::{BareFn, BareFnMut, BareFnOnce};
@@ -102,4 +99,53 @@ fn test_print_fn_once() {
 
     let bare = bare_closure.leak();
     assert_eq!(unsafe { bare(5) }, 15);
+}
+
+#[cfg(not(feature = "no_std"))]
+#[test]
+fn test_double_free() {
+    println!("test BareFn (coerced)");
+
+    #[derive(Debug)]
+    struct Val(usize, Box<usize>);
+    impl Val {
+        fn new(val: usize) -> Self {
+            Self(val, Box::new(101 /* just to alloc and drop */))
+        }
+    }
+    impl Drop for Val {
+        fn drop(&mut self) {
+            println!("Val dropped (val={})", self.0);
+        }
+    }
+
+    fn f() -> u32 {
+        println!("bare BareFn call");
+        let mut v = Val::new(100);
+        v.0 += 1;
+        drop(v);
+        42
+    }
+    let f: fn() -> u32 = f as _; // <- impportant, ty-coercion
+
+    // call FnItem as-is:
+    assert_eq!(42, f());
+
+    // wrap, deploy, call and drop:
+    unsafe {
+        let bare = BareFn::new_c_in(f, &SLAB);
+        assert_eq!(42, bare.bare()());
+    }
+
+    // wrap, deploy, call and drop again:
+    unsafe {
+        let wrap = BareFn::new_c_in(f, &SLAB);
+        let bare = wrap.bare();
+        assert_eq!(42, bare());
+        assert_eq!(42, bare());
+    }
+
+    // call FnItem as-is again:
+    assert_eq!(42, f());
+    println!("test FnPtr - done");
 }
