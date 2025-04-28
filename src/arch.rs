@@ -44,16 +44,16 @@ macro_rules! _thunk_asm {
 macro_rules! _thunk_asm {
     ($closure_ptr:ident) => {
         ::core::arch::asm!(
-            "mov {cl_addr}, [eip + 2f]",
-            "jmp [eip + 3f]",
+            "mov $0, {cl_addr}",
+            "mov $1f, {jmp_addr}",
+            "jmp *{jmp_addr}",
             ".align 4",
-            "2:",
             ".4byte {cl_magic}",
-            "3:",
-            ".4byte 0",
-            cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
-            cl_addr = out(reg) $closure_ptr,
-            options(nostack)
+            "1:",
+            cl_magic = const { CLOSURE_ADDR_MAGIC },
+            cl_addr = out(reg) closure_ptr,
+            jmp_addr = out(reg) _,
+            options(nostack, att_syntax)
         );
     };
 }
@@ -168,15 +168,25 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
 
     // Copy the prologue + asm block from the compiler-generated thunk
     core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
-    // Write the closure pointer
-    rw.add(offset).cast::<*const ()>().write(closure_ptr);
 
-    // Write the jump back to the compiler-generated thunk
-    let thunk_return = thunk_template.add(offset + 2 * PTR_SIZE);
-    // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
-    #[cfg(thumb_mode)]
-    let thunk_return = thunk_return.map_addr(|a| a | 1);
-    rw.add(offset + PTR_SIZE).cast::<*const u8>().write(thunk_return);
+    #[cfg(target_arch = "x86")]
+    {
+        // Write the closure pointer
+        // On X86, the jump to the compiler-generated thunk is taken care of using a relocation.
+        rw.add(1).cast::<*const ()>().write_unaligned(closure_ptr);
+    }
+    #[cfg(not(target_arch = "x86"))]
+    {
+        // Write the closure pointer
+        rw.add(offset).cast::<*const ()>().write(closure_ptr);
+
+        // Write the jump back to the compiler-generated thunk
+        let thunk_return = thunk_template.add(offset + 2 * PTR_SIZE);
+        // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
+        #[cfg(thumb_mode)]
+        let thunk_return = thunk_return.map_addr(|a| a | 1);
+        rw.add(offset + PTR_SIZE).cast::<*const u8>().write(thunk_return);
+    }
 
     J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
     J::flush_instruction_cache(thunk_rx, thunk_size);
