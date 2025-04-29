@@ -6,14 +6,16 @@ on:
     branches: [master]
 
 jobs:
-  publish-dry-run:
+  check-release-readiness:
     if: github.event_name == 'pull_request'
-    name: cargo publish --dry-run
+    name: Check release readiness
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cargo publish -p closure-ffi-proc-macros --dry-run
-      - run: cargo publish -p closure-ffi --dry-run
+      - name: Check version was bumped
+        run: python ./.github/scripts/assert_version_bump.py
+      - name: Publish dry-run
+        run: cargo +nightly -Z package-workspace publish --workspace --dry-run
       - name: Generate release notes
         run: python ./.github/scripts/release_notes.py
 
@@ -36,7 +38,7 @@ jobs:
 
       - uses: actions/checkout@v4
       - name: crates.io publish
-        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo +nightly -Z package-workspace publish --workspace --token ${{ secrets.CRATES_IO_TOKEN }}
       
       - name: GitHub release
         uses: softprops/action-gh-release@v2
