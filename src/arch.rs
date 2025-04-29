@@ -181,7 +181,7 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     #[cfg(not(target_arch = "x86"))]
     {
         // Write the jump back to the compiler-generated thunk
-        let thunk_return = thunk_template.add(offset + 2 * PTR_SIZE);
+        let thunk_return = thunk_template.add(thunk_size);
         // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
         #[cfg(thumb_mode)]
         let thunk_return = thunk_return.map_addr(|a| a | 1);
