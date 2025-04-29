@@ -23,6 +23,8 @@ jobs:
         features:
           - --no-default-features
           - --no-default-features -F no_std
+          - --no-default-features -F custom_jit_alloc,no_std
+          - -F full
           - -F full,no_std
 
     runs-on: ubuntu-latest
@@ -48,8 +50,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - run: cargo build --profile ${{ matrix.profile }} -F full
-      - run: cargo test --profile ${{ matrix.profile }} -F full
+      - name: Full feature set build and test
+        run: cargo test --profile ${{ matrix.profile }} -F full
+      - run: cargo clean
+      - name: Custom JIT alloc build and test
+        run: cargo test --profile ${{ matrix.profile }} --no-default-features -F custom_jit_alloc
 
   build_and_test_i686_windows:
     strategy:

@@ -344,15 +344,15 @@ pub use bundled_jit_alloc::*;
 ///
 /// The macro can either take a path to a static variable or an expression resolving to a
 /// `&'static JitAlloc`:
-/// 
+///
 /// ```ignore
 /// static GLOBAL_JIT: MyJitAlloc = MyJitAlloc::new();
 /// global_jit_alloc!(GLOBAL_JIT);
 /// ```
-/// 
+///
 /// ```ignore
 /// use std::sync::OnceLock;
-/// 
+///
 /// global_jit_alloc!({
 ///     static WRAPPED_JIT: OnceLock<MyJitAlloc> = OnceLock::new();
 ///     WRAPPED_JIT.get_or_init(|| MyJitAlloc::new())
