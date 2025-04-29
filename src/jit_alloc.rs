@@ -128,9 +128,10 @@ impl<J: JitAlloc, R: spin::RelaxStrategy> JitAlloc for spin::lazy::Lazy<J, fn() 
 /// [`spin::Mutex`] under `no_std`).
 ///
 /// When the `custom_jit_alloc` feature is enabled, defers to a [`JitAlloc`] implementation
-/// provided by a downstream crate using the [`global_jit_alloc!`] macro.
+/// provided by a downstream crate using the [`global_jit_alloc`] macro.
 ///
 /// [`spin::Mutex`]: https://docs.rs/spin/0.9/spin/type.Mutex.html
+/// [`global_jit_alloc`]: crate::global_jit_alloc
 #[derive(Default, Clone, Copy)]
 pub struct GlobalJitAlloc;
 
