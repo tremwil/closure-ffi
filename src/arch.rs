@@ -13,6 +13,11 @@ pub const CLOSURE_ADDR_MAGIC: usize = 0x0ebe4a8e072bdb2a_u64 as usize;
 #[doc(hidden)]
 pub const CLOSURE_ADDR_MAGIC: usize = 0x0000DEAD0000DEAD_u64 as usize;
 
+#[cfg(target_arch = "x86")]
+pub const THUNK_EXTRA_SIZE: usize = 4 + 5 + 2; // mov closure, mov return, jmp
+#[cfg(not(target_arch = "x86"))]
+pub const THUNK_EXTRA_SIZE: usize = size_of::<usize>() * 2; // closure addr, return addr
+
 // We have to expose the thunk asm macros to allow the hrtb_cc proc macro to generate more complex
 // thunk templates
 
@@ -44,11 +49,11 @@ macro_rules! _thunk_asm {
 macro_rules! _thunk_asm {
     ($closure_ptr:ident) => {
         ::core::arch::asm!(
-            "mov $0, {cl_addr}",
+            ".align 4",
+            "nopl 0(%eax)",
+            "mov ${cl_magic}, {cl_addr}",
             "mov $1f, {jmp_addr}",
             "jmp *{jmp_addr}",
-            ".align 4",
-            ".4byte {cl_magic}",
             "1:",
             cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
@@ -157,7 +162,7 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     while thunk_template.add(offset).cast::<usize>().read() != CLOSURE_ADDR_MAGIC {
         offset += PTR_SIZE;
     }
-    let thunk_size = offset + 2 * PTR_SIZE;
+    let thunk_size = offset + THUNK_EXTRA_SIZE;
 
     // Skip initial bytes for proper alignment
     let (rx, rw) = jit.alloc(thunk_size + PTR_SIZE - 1)?;
@@ -169,17 +174,12 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     // Copy the prologue + asm block from the compiler-generated thunk
     core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
 
-    #[cfg(target_arch = "x86")]
-    {
-        // Write the closure pointer
-        // On X86, the jump to the compiler-generated thunk is taken care of using a relocation.
-        rw.add(1).cast::<*const ()>().write_unaligned(closure_ptr);
-    }
+    // Write the closure pointer
+    rw.add(offset).cast::<*const ()>().write(closure_ptr);
+
+    // On X86, we use a PE/ELF relocation for this
     #[cfg(not(target_arch = "x86"))]
     {
-        // Write the closure pointer
-        rw.add(offset).cast::<*const ()>().write(closure_ptr);
-
         // Write the jump back to the compiler-generated thunk
         let thunk_return = thunk_template.add(offset + 2 * PTR_SIZE);
         // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
