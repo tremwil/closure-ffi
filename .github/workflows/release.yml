@@ -28,8 +28,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/checkout@v4
+      
       - name: crates.io publish
         run: cargo +nightly -Z package-workspace publish --workspace --token ${{ secrets.CRATES_IO_TOKEN }}
         
