@@ -107,6 +107,7 @@ fn test_double_free() {
     println!("test BareFn (coerced)");
 
     #[derive(Debug)]
+    #[allow(dead_code)]
     struct Val(usize, Box<usize>);
     impl Val {
         fn new(val: usize) -> Self {

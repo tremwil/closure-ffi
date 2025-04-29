@@ -24,6 +24,7 @@ repository.workspace = true
 default = [ "bundled_jit_alloc" ]
 no_std = [ "spin" ]
 bundled_jit_alloc = [ "jit-allocator" ]
+custom_jit_alloc = []
 proc_macros = [ "closure-ffi-proc-macros" ]
 full = [ "bundled_jit_alloc", "proc_macros" ]
 build-docs = []

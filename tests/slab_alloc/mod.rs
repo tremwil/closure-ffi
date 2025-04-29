@@ -41,7 +41,7 @@ impl JitAlloc for SlabAlloc {
         Ok(())
     }
 
-    unsafe fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
+    unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
         #[cfg(not(target_arch = "arm"))]
         clear_cache::clear_cache(rx_ptr, rx_ptr.add(size));
         #[cfg(all(target_arch = "arm", target_os = "linux"))]
@@ -57,9 +57,13 @@ impl JitAlloc for SlabAlloc {
     }
 
     unsafe fn protect_jit_memory(
+        &self,
         _ptr: *const u8,
         _size: usize,
         _access: closure_ffi::jit_alloc::ProtectJitAccess,
     ) {
+        // TODO (MacOS): implement this!
+        // Hardened runtime isn't used in macos-latest GitHub actions runners, so leaving this blank
+        // is fine for CI testing
     }
 }

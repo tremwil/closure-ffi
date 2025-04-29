@@ -169,7 +169,7 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     let align_offset = rw.add(offset).align_offset(PTR_SIZE);
     let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
 
-    J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
+    jit.protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
 
     // Copy the prologue + asm block from the compiler-generated thunk
     core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
@@ -188,8 +188,8 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
         rw.add(offset + PTR_SIZE).cast::<*const u8>().write(thunk_return);
     }
 
-    J::protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
-    J::flush_instruction_cache(thunk_rx, thunk_size);
+    jit.protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
+    jit.flush_instruction_cache(thunk_rx, thunk_size);
 
     // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
     #[cfg(thumb_mode)]
