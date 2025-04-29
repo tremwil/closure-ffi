@@ -32,6 +32,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: cargo check --workspace ${{ matrix.features }}
 
+  doc:
+    name: cargo doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo +nightly doc -F full,build-docs
+
   build_and_test:
     strategy:
       fail-fast: false
@@ -73,3 +80,17 @@ jobs:
       # in jit-allocator
       - run: cargo build --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
       - run: cargo test --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
+  
+  all_checks_pass:
+    needs:
+      - fmt
+      - check
+      - doc
+      - build_and_test
+      - build_and_test_i686_windows
+    runs-on: ubuntu-latest
+    steps:
+    - name: Decide whether the needed jobs succeeded or failed
+      uses: re-actors/alls-green@release/v1
+      with:
+        jobs: ${{ toJSON(needs) }}
