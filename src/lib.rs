@@ -11,6 +11,9 @@
 ))]
 compile_error!("closure-ffi is not supported on this target architecture.");
 
+#[cfg(all(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+compile_error!("only one of bundled_jit_alloc or custom_jit_alloc may be specified");
+
 #[cfg(feature = "no_std")]
 extern crate alloc;
 

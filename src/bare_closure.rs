@@ -13,15 +13,14 @@ pub use std::boxed::Box;
 #[cfg(feature = "proc_macros")]
 #[doc(inline)]
 pub use closure_ffi_proc_macros::bare_dyn;
-#[cfg(feature = "bundled_jit_alloc")]
-use jit_alloc::GlobalJitAlloc;
 
-// jit_alloc::self is not used when bundled_jit_alloc is disabled
+#[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+use crate::jit_alloc::GlobalJitAlloc;
 #[allow(unused_imports)]
 use crate::{
     arch::{create_thunk, ThunkInfo},
     cc,
-    jit_alloc::{self, JitAlloc, JitAllocError},
+    jit_alloc::{JitAlloc, JitAllocError},
     thunk::{FnMutThunk, FnOnceThunk, FnThunk},
 };
 
@@ -71,7 +70,7 @@ macro_rules! bare_closure_impl {
         $fn_trait_doc:literal,
         $safety_doc:literal
     ) => {
-        #[cfg(feature = "bundled_jit_alloc")]
+        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         #[cfg_attr(feature = "build-docs", doc(cfg(all())))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
@@ -88,7 +87,7 @@ macro_rules! bare_closure_impl {
             phantom: PhantomData<B>,
         }
 
-        #[cfg(not(feature = "bundled_jit_alloc"))]
+        #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
@@ -277,7 +276,7 @@ macro_rules! bare_closure_impl {
             }
         }
 
-        #[cfg(feature = "bundled_jit_alloc")]
+        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         impl<B: Copy, F> $ty_name<B, F, GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///

@@ -1,11 +1,15 @@
+name: Checks
 on:
   push:
+    branches: [dev]
   pull_request:
+    branches-ignore: [master]
 
 jobs:
   fmt:
     name: cargo fmt
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
       - run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
@@ -19,12 +23,21 @@ jobs:
         features:
           - --no-default-features
           - --no-default-features -F no_std
+          - --no-default-features -F custom_jit_alloc,no_std
+          - -F full
           - -F full,no_std
 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: cargo check --workspace ${{ matrix.features }}
+
+  doc:
+    name: cargo doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo +nightly doc -F full,build-docs
 
   build_and_test:
     strategy:
@@ -36,16 +49,19 @@ jobs:
         runner:
           - ubuntu-latest # x86_64-unknown-linux-gnu
           - windows-latest # x86_64-pc-windows-msvc
-          #- macos-latest # aarch64-apple-darwin (disabled until fix found)
+          - macos-latest # aarch64-apple-darwin
           - ubuntu-24.04-arm # aarch64-unknown-linux-gnu
-          #- macos-13 # x86_64-apple-darwin (disabled until fix found)
+          - macos-13 # x86_64-apple-darwin
     
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - run: cargo build --profile ${{ matrix.profile }} -F full
-      - run: cargo test --profile ${{ matrix.profile }} -F full
+      - name: Full feature set build and test
+        run: cargo test --profile ${{ matrix.profile }} -F full
+      - run: cargo clean
+      - name: Custom JIT alloc build and test
+        run: cargo test --profile ${{ matrix.profile }} --no-default-features -F custom_jit_alloc
 
   build_and_test_i686_windows:
     strategy:
@@ -60,5 +76,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup target add i686-pc-windows-msvc
+      # At the moment, bundled_jit_alloc is not supported on i686 windows due to a linker error
+      # in jit-allocator
       - run: cargo build --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
       - run: cargo test --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
+  
+  all_checks_pass:
+    needs:
+      - fmt
+      - check
+      - doc
+      - build_and_test
+      - build_and_test_i686_windows
+    runs-on: ubuntu-latest
+    steps:
+    - name: Decide whether the needed jobs succeeded or failed
+      uses: re-actors/alls-green@release/v1
+      with:
+        jobs: ${{ toJSON(needs) }}

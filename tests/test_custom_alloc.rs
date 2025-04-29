@@ -1,9 +1,8 @@
-// MacOS doesn't support creating RWE memory
-#![cfg(not(target_os = "macos"))]
+#![cfg(feature = "custom_jit_alloc")]
 
 mod slab_alloc;
 
-use closure_ffi::{BareFn, BareFnMut, BareFnOnce};
+use closure_ffi::{global_jit_alloc, BareFn, BareFnMut, BareFnOnce};
 use slab_alloc::SlabAlloc;
 
 #[cfg(not(feature = "no_std"))]
@@ -12,9 +11,11 @@ static SLAB: std::sync::LazyLock<SlabAlloc> = std::sync::LazyLock::new(|| SlabAl
 #[cfg(feature = "no_std")]
 static SLAB: spin::Lazy<SlabAlloc> = spin::Lazy::new(|| SlabAlloc::new(0x10000));
 
+global_jit_alloc!(SLAB);
+
 #[test]
 fn test_stateless_fn() {
-    let bare_closure = BareFn::new_c_in(move |n: usize| 2 * n, &SLAB);
+    let bare_closure = BareFn::new_c(move |n: usize| 2 * n);
 
     let bare = bare_closure.bare();
     assert_eq!(unsafe { bare(5) }, 10);
@@ -23,7 +24,7 @@ fn test_stateless_fn() {
 #[test]
 fn test_borrow_fn() {
     let array = [0, 5, 10, 15, 20];
-    let bare_closure = BareFn::new_c_in(|n: usize| array[n], &SLAB);
+    let bare_closure = BareFn::new_c(|n: usize| array[n]);
 
     let bare = bare_closure.bare();
     assert_eq!(unsafe { bare(3) }, 15);
@@ -32,7 +33,7 @@ fn test_borrow_fn() {
 #[test]
 fn test_borrow_fn_mut() {
     let mut sum = 0;
-    let bare_closure = BareFnMut::new_c_in(|n: usize| sum += n, &SLAB);
+    let bare_closure = BareFnMut::new_c(|n: usize| sum += n);
     let bare = bare_closure.bare();
 
     unsafe {
@@ -48,13 +49,10 @@ fn test_borrow_fn_mut() {
 #[test]
 fn test_moved_fn_mut() {
     let mut sum = 0;
-    let bare_closure = BareFnMut::new_c_in(
-        move |n: usize| {
-            sum += n;
-            sum
-        },
-        &SLAB,
-    );
+    let bare_closure = BareFnMut::new_c(move |n: usize| {
+        sum += n;
+        sum
+    });
     let bare = bare_closure.bare();
 
     unsafe {
@@ -69,13 +67,10 @@ fn test_moved_fn_mut() {
 #[cfg(not(feature = "no_std"))]
 #[test]
 fn test_print_fn() {
-    let bare_closure = BareFn::new_c_in(
-        move |n: usize| {
-            println!("{:08x}", n);
-            3 * n
-        },
-        &SLAB,
-    );
+    let bare_closure = BareFn::new_c(move |n: usize| {
+        println!("{:08x}", n);
+        3 * n
+    });
 
     let bare = bare_closure.bare();
     assert_eq!(unsafe { bare(5) }, 15);
@@ -86,13 +81,10 @@ fn test_print_fn() {
 #[cfg(not(feature = "no_std"))]
 #[test]
 fn test_print_fn_once() {
-    let bare_closure = BareFnOnce::new_c_in(
-        move |n: usize| {
-            println!("{:08x}", n);
-            3 * n
-        },
-        &SLAB,
-    );
+    let bare_closure = BareFnOnce::new_c(move |n: usize| {
+        println!("{:08x}", n);
+        3 * n
+    });
 
     let bare = bare_closure.leak();
     assert_eq!(unsafe { bare(5) }, 15);
