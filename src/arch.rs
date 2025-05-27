@@ -201,4 +201,18 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     })
 }
 
+/// Runs the provided closure and returns the result. Guaranteed to not inline its code.
+///
+/// Necessary to prevent the compiler inlining a closure call into the
+/// compiler thunk function, which may bring in some PC-relative static constant loads
+/// in the prologue on some architectures (namely arm/aarch64).
+#[doc(hidden)]
+#[inline(never)]
+pub fn _never_inline<R>(f: impl FnOnce() -> R) -> R {
+    // Empty asm block is not declared as pure, so may have side-effects
+    // Necessary to make inline(never) actually work
+    unsafe { core::arch::asm!("") }
+    f()
+}
+
 pub use _thunk_asm;

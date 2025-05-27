@@ -25,9 +25,9 @@ default = [ "bundled_jit_alloc" ]
 no_std = [ "spin" ]
 bundled_jit_alloc = [ "jit-allocator" ]
 custom_jit_alloc = []
+unstable = []
 proc_macros = [ "closure-ffi-proc-macros" ]
 full = [ "bundled_jit_alloc", "proc_macros" ]
-build-docs = []
 
 [dependencies]
 closure-ffi-proc-macros = { path = "proc_macros", version = "0.5.0", optional = true }
@@ -46,4 +46,5 @@ region = "3.0.2"
 clear-cache = "0.1.1"
 
 [package.metadata.docs.rs]
-features = ["full", "build-docs"]
+features = ["full"]
+rustc-args = ["--cfg docsrs"]

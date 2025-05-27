@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Breaking changes
+- Changes to the trait system: bare function parameters now implement the `FnPtr` trait, which 
+  was carefully designed after attempting to build a function hooking library around `closure-ffi`.
+  This required changes to the way higher-kinded bare functions are supported; see the doc for the new 
+  `bare_hrtb!` proc macro to learn more.
+
+- Sweeping changes to the `BareFn*` generic parameters. The `BareFn*` types now type erase the closure,
+  removing the need for the `bare_dyn` macro (which was not ideal as it would add an uncessary layer of 
+  indirection). The DST used for type erasure is customizable via the type parameter `S` of `BareFn*Any`, 
+  with `BareFn*` and `BareFn*Send` now being type aliases for the common cases of no additional bounds 
+  and a `Send` bound on the closure, respectively.
+
+- Removed the `bare_dyn!` macro as it is no longer needed now that `BareFn*` type-erases the closure.
+- Replaced the `cc::hrtb!` by the `bare_hrtb!` macro, which now works differently. See the doc for more info.
+
+### Added
+- `unstable` feature enabling support for functionality locked behind unstable Rust features.
+
 ## [0.5.0] - 2025-04-29
 
 ### Breaking Changes

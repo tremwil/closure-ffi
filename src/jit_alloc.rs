@@ -360,7 +360,7 @@ pub use bundled_jit_alloc::*;
 /// });
 /// ```
 #[macro_export]
-#[cfg(any(feature = "custom_jit_alloc", feature = "build-docs"))]
+#[cfg(any(feature = "custom_jit_alloc", docsrs))]
 #[cfg_attr(feature = "build-docs", doc(cfg(feature = "custom_jit_alloc")))]
 macro_rules! global_jit_alloc {
     ($static_var:path) => {
