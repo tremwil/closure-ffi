@@ -11,8 +11,42 @@ fn test_infer_closure() {
 }
 
 #[test]
+fn test_boxed_fn() {
+    let boxed_dyn = Box::new(|n: usize| 2 * n) as Box<dyn Fn(usize) -> usize>;
+    let bare_closure = BareFn::new_c(boxed_dyn);
+
+    assert_eq!(unsafe { bare_closure.bare().call((42,)) }, 84);
+}
+
+#[test]
+fn test_ref_dyn() {
+    let closure = |n: usize| 2 * n;
+    let bare_closure = BareFn::new_c(&closure as &dyn Fn(usize) -> usize);
+
+    assert_eq!(unsafe { bare_closure.bare().call((42,)) }, 84);
+}
+
+#[test]
+fn test_mut_dyn() {
+    let mut sum = 0;
+    let mut closure = |n: usize| sum += n;
+
+    let bare_closure = BareFnMut::new_c(&mut closure as &mut dyn FnMut(usize));
+    let bare = bare_closure.bare();
+
+    unsafe {
+        bare(5);
+        bare(3);
+        bare(7);
+    }
+
+    drop(bare_closure);
+    assert_eq!(sum, 15);
+}
+
+#[test]
 fn test_stateless_fn() {
-    let bare_closure = BareFn::new_c(move |n: usize| 2 * n);
+    let bare_closure = BareFn::new_c(|n: usize| 2 * n);
 
     let bare = bare_closure.bare();
     assert_eq!(unsafe { bare(5) }, 10);
