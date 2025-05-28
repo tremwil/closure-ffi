@@ -120,6 +120,9 @@ macro_rules! bare_closure_impl {
         bare_receiver: $bare_receiver:ty,
         fn_trait_doc: $fn_trait_doc:literal,
         ty_name_doc: $ty_name_doc:literal,
+        with_cc_doc: $with_cc_doc:literal,
+        with_cc_in_doc: $with_cc_in_doc:literal,
+        try_with_cc_in_doc: $try_with_cc_in_doc:literal,
         non_send_alias_doc: $non_send_alias_doc:literal,
         send_alias_doc: $send_alias_doc:literal,
         safety_doc: $safety_doc:literal
@@ -229,8 +232,10 @@ macro_rules! bare_closure_impl {
             ///
             /// # Panics
             /// If the provided JIT allocator fails to allocate memory. For a non-panicking
-            /// version, see `try_with_cc_in`.
+            /// version, see
+            #[doc = $try_with_cc_in_doc]
             #[allow(unused_variables)]
+            #[inline]
             pub fn with_cc_in<CC, F>(cconv: CC, fun: F, jit_alloc: A) -> Self
             where
                 F: $trait_ident<B, CC> + ToBoxedUnsize<S>,
@@ -242,9 +247,17 @@ macro_rules! bare_closure_impl {
             ///
             /// Uses `jit_alloc` to allocate the W^X memory used to create the thunk.
             ///
+            /// This constructor is best used when the type of `B` is already known from an existing
+            /// type annotation. If you want to infer `B` from the closure arguments and a calling
+            /// convention, consider using
+            #[doc = $with_cc_in_doc]
+            /// instead.
+            ///
             /// # Panics
             /// If the provided JIT allocator fails to allocate memory. For a non-panicking
-            /// version, see `try_with_cc_in`.
+            /// version, see
+            #[doc = $try_with_cc_in_doc]
+            #[inline]
             pub fn new_in<F>(fun: F, jit_alloc: A) -> Self
             where
                 F: $trait_ident<B, B::CC> + ToBoxedUnsize<S>,
@@ -367,6 +380,12 @@ macro_rules! bare_closure_impl {
         #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         impl<B: FnPtr, S: ?Sized> $ty_name<B, S, GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function of signature `B`.
+            ///
+            /// This constructor is best used when the type of `B` is already known from an existing
+            /// type annotation. If you want to infer `B` from the closure arguments and a calling
+            /// convention, consider using
+            #[doc = $with_cc_doc]
+            /// or the `new_*` suffixed constructors instead.
             ///
             /// The W^X memory required is allocated using the global JIT allocator.
             #[inline]
@@ -513,6 +532,9 @@ bare_closure_impl!(
     bare_receiver: Self,
     fn_trait_doc: "[`FnOnce`]",
     ty_name_doc: "[`BareFnOnceAny`]",
+    with_cc_doc: "[`with_cc`](BareFnOnceAny::with_cc)",
+    with_cc_in_doc: "[`with_cc_in`](BareFnOnceAny::with_cc_in)",
+    try_with_cc_in_doc: "[`try_with_cc_in`](BareFnOnceAny::try_with_cc_in)",
     non_send_alias_doc: "[`BareFnOnce`]",
     send_alias_doc: "[`BareFnOnceSend`]",
     safety_doc: "- The function has been called before.\n
@@ -529,6 +551,9 @@ bare_closure_impl!(
     bare_receiver: &Self,
     fn_trait_doc: "[`FnMut`]",
     ty_name_doc: "[`BareFnMutAny`]",
+    with_cc_doc: "[`with_cc`](BareFnMutAny::with_cc)",
+    with_cc_in_doc: "[`with_cc_in`](BareFnMutAny::with_cc_in)",
+    try_with_cc_in_doc: "[`try_with_cc_in`](BareFnMutAny::try_with_cc_in)",
     non_send_alias_doc:  "[`BareFnMut`]",
     send_alias_doc: "[`BareFnMutSend`]",
     safety_doc: "- A borrow induced by a previous call is still active.\n
@@ -544,6 +569,9 @@ bare_closure_impl!(
     bare_receiver: &Self,
     fn_trait_doc: "[`Fn`]",
     ty_name_doc: "[`BareFnAny`]",
+    with_cc_doc: "[`with_cc`](BareFnAny::with_cc)",
+    with_cc_in_doc: "[`with_cc_in`](BareFnAny::with_cc_in)",
+    try_with_cc_in_doc: "[`try_with_cc_in`](BareFnAny::try_with_cc_in)",
     non_send_alias_doc:  "[`BareFn`]",
     send_alias_doc: "[`BareFnSend`]",
     safety_doc: "- The closure is not `Sync`, if calling from a different thread than the current one."
