@@ -5,11 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2025-05-28
 
 ### Breaking changes
 - Changes to the trait system: bare function parameters now implement the `FnPtr` trait, which 
-  was carefully designed after attempting to build a function hooking library around `closure-ffi`.
+  was carefully re-designed after attempting to build a function hooking library around `closure-ffi`.
   This required changes to the way higher-kinded bare functions are supported; see the doc for the new 
   `bare_hrtb!` proc macro to learn more.
 
