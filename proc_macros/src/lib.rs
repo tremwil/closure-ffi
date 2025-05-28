@@ -125,53 +125,8 @@ impl<F: FnMut(&mut syn::Lifetime)> syn::visit_mut::VisitMut for ReplaceLt<F> {
     }
 }
 
-/// Creates an instance of an anonymous type which can be used as a calling convention
-/// for higher-kinded bare functions when instantiating bare closure wrappers.
-///
-/// For example, the following evaluates to an expression which can be passed to `BareFn*::new`
-/// to create an adapter for the closure of type *exactly* `unsafe extern "C" for<'a> fn(&'a str) ->
-/// &'a u32`:
-///
-/// ```ignore
-/// hrtb_cc!(extern "C" for<'a> fn(&'a str) -> &'a u32)
-/// ```
-///
-/// Note that the `unsafe` keyword is automatically added if not present.
-///
-/// The bare function signature can additionally contain generic arguments using the `#[with]`
-/// attribute:
-///
-/// ```ignore
-/// hrtb_cc!(#[with(<T>)] extern "C" for<'a> fn(&'a str) -> &'a T)
-/// ```
-///
-/// This hack is necessary as there is no way to blanket implement the `FnThunk` traits for all
-/// lifetime associations. For this reason, the following won't compile:
-///
-/// ```ignore
-/// use closure_ffi::BareFn;
-///
-/// fn take_higher_rank_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {}
-///
-/// let bare_closure = BareFn::new_c(|opt: &Option<u32>| opt.as_ref());
-/// take_higher_rank_fn(bare_closure.bare());
-/// ```
-///
-/// However, using the output of this macro as the calling convention, we can get it to work:
-///
-/// ```ignore
-/// use closure_ffi::BareFn;
-///
-/// fn take_higher_rank_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {}
-///
-/// let bare_closure = BareFn::new(
-///     hrtb_cc!(extern "C" fn(&Option<u32>) -> Option<&u32>),
-///     |opt| opt.as_ref()
-/// );
-/// take_higher_rank_fn(bare_closure.bare());
-/// ```
 #[proc_macro]
-pub fn hrtb_cc(tokens: TokenStream) -> TokenStream {
+pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(tokens as MacroInput);
     input
         .bare_fn
