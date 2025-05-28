@@ -15,7 +15,7 @@ macro_rules! cc_thunk_impl_triple {
         }
 
         unsafe impl<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>
-            $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
+            $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R, $cconv> for F
         {
             const THUNK_TEMPLATE_ONCE: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
@@ -27,7 +27,7 @@ macro_rules! cc_thunk_impl_triple {
             };
         }
         unsafe impl<F: FnMut($($tys),*) -> R, R, $($id_tys),*>
-            $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
+            $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R, $cconv> for F
         {
             const THUNK_TEMPLATE_MUT: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: FnMut($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
@@ -39,7 +39,7 @@ macro_rules! cc_thunk_impl_triple {
             };
         }
         unsafe impl<F: Fn($($tys),*) -> R, R, $($id_tys),*>
-            $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
+            $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R, $cconv> for F
         {
             const THUNK_TEMPLATE: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: Fn($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
@@ -54,7 +54,7 @@ macro_rules! cc_thunk_impl_triple {
 }
 
 macro_rules! cc_trait_impl_recursive {
-    // Case 1: Non-empty ident lists
+    // Case 1: Non-empty parameter lists
     (
         $cconv:ty,
         $cconv_lit:literal,
@@ -73,7 +73,7 @@ macro_rules! cc_trait_impl_recursive {
         );
     };
 
-    // Case 2: Exhausted ident lists
+    // Case 2: Exhausted parameter lists
     (
         $cconv:ty,
         $cconv_lit:literal,

@@ -1,18 +1,11 @@
 //! Provides the [`BareFnOnce`], [`BareFnMut`] and [`BareFn`] wrapper types which allow closures to
 //! be called through context-free unsafe bare functions.
 
-// Provide a re-export of Box that proc macros can use no matter the no_std state
-#[doc(hidden)]
-#[cfg(feature = "no_std")]
-pub use alloc::boxed::Box;
 use core::{marker::PhantomData, mem::ManuallyDrop};
-#[doc(hidden)]
-#[cfg(not(feature = "no_std"))]
-pub use std::boxed::Box;
 
 #[cfg(feature = "proc_macros")]
-#[doc(inline)]
-pub use closure_ffi_proc_macros::bare_dyn;
+#[doc(hidden)]
+pub use closure_ffi_proc_macros::bare_hrtb as bare_hrtb_impl;
 
 #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
 use crate::jit_alloc::GlobalJitAlloc;
@@ -23,6 +16,62 @@ use crate::{
     jit_alloc::{JitAlloc, JitAllocError},
     traits::{Any, FnMutThunk, FnOnceThunk, FnPtr, FnThunk, ToBoxedUnsize},
 };
+
+/// Creates an instance of an anonymous type which can be used as a calling convention
+/// for higher-kinded bare functions when instantiating bare closure wrappers.
+///
+/// For example, the following evaluates to an expression which can be passed to `BareFn*::new`
+/// to create an adapter for the closure of type *exactly* `unsafe extern "C" for<'a> fn(&'a str) ->
+/// &'a u32`:
+///
+/// ```ignore
+/// hrtb_cc!(extern "C" for<'a> fn(&'a str) -> &'a u32)
+/// ```
+///
+/// Note that the `unsafe` keyword is automatically added if not present.
+///
+/// The bare function signature can additionally contain generic arguments using the `#[with]`
+/// attribute:
+///
+/// ```ignore
+/// hrtb_cc!(#[with(<T>)] extern "C" for<'a> fn(&'a str) -> &'a T)
+/// ```
+///
+/// This hack is necessary as there is no way to blanket implement the `FnThunk` traits for all
+/// lifetime associations. For this reason, the following won't compile:
+///
+/// ```ignore
+/// use closure_ffi::BareFn;
+///
+/// fn take_higher_rank_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {}
+///
+/// let bare_closure = BareFn::new_c(|opt: &Option<u32>| opt.as_ref());
+/// take_higher_rank_fn(bare_closure.bare());
+/// ```
+///
+/// However, using the output of this macro as the calling convention, we can get it to work:
+///
+/// ```ignore
+/// use closure_ffi::BareFn;
+///
+/// fn take_higher_rank_fn(bare_fn: unsafe extern "C" fn(&Option<u32>) -> Option<&u32>) {}
+///
+/// let bare_closure = BareFn::new(
+///     hrtb_cc!(extern "C" fn(&Option<u32>) -> Option<&u32>),
+///     |opt| opt.as_ref()
+/// );
+/// take_higher_rank_fn(bare_closure.bare());
+/// ```
+#[cfg(feature = "proc_macros")]
+#[macro_export]
+macro_rules! bare_hrtb {
+    ($($tokens:tt)*) => {
+        $crate::bare_closure::bare_hrtb_impl!($crate, $($tokens)*)
+    };
+}
+
+#[cfg(feature = "proc_macros")]
+pub use bare_hrtb;
 
 macro_rules! cc_shorthand {
     ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal $(,$cfg:meta)?) => {
@@ -35,10 +84,9 @@ macro_rules! cc_shorthand {
         #[inline]
         pub fn $fn_name<F>(fun: F) -> Self
         where
-            F: ToBoxedUnsize<S>,
-            ($cc_ty, F): $trait_ident<B>,
+            F: $trait_ident<B, $cc_ty> + ToBoxedUnsize<S>,
         {
-            Self::new(<$cc_ty>::default(), fun)
+            Self::with_cc(<$cc_ty>::default(), fun)
         }
     };
 }
@@ -54,10 +102,9 @@ macro_rules! cc_shorthand_in {
         #[inline]
         pub fn $fn_name<F>(fun: F, jit_alloc: A) -> Self
         where
-            F: ToBoxedUnsize<S>,
-            ($cc_ty, F): $trait_ident<B>,
+            F: $trait_ident<B, $cc_ty> + ToBoxedUnsize<S>,
         {
-            Self::new_in(<$cc_ty>::default(), fun, jit_alloc)
+            Self::with_cc_in(<$cc_ty>::default(), fun, jit_alloc)
         }
     };
 }
@@ -95,13 +142,11 @@ macro_rules! bare_closure_impl {
         ///
         /// # Type parameters
         /// - `B`: The bare function pointer to expose the closure as. For higher-kinded bare
-        ///   function pointers, you will need to use the `bare_hrtb` macro to define a wrapper
+        ///   function pointers, you will need to use the [`bare_hrtb`] macro to define a wrapper
         ///   type.
         /// - `S`: The dynamically-sized type to use to type-erase the closure. By default, this is
-        ///   [`dyn Any`][any] which is implemented by all `'static` types.
+        ///   [`dyn Any`](Any) which is implemented by all `'static` types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
-        ///
-        /// [any][Any]
         #[allow(dead_code)]
         pub struct $ty_name<B: FnPtr, S: ?Sized = dyn Any, A: JitAlloc = GlobalJitAlloc> {
             thunk_info: ThunkInfo,
@@ -132,13 +177,11 @@ macro_rules! bare_closure_impl {
         ///
         /// # Type parameters
         /// - `B`: The bare function pointer to expose the closure as. For higher-kinded bare
-        ///   function pointers, you will need to use the `bare_hrtb` macro to define a wrapper
+        ///   function pointers, you will need to use the [`bare_hrtb`] macro to define a wrapper
         ///   type.
         /// - `S`: The dynamically-sized type to use to type-erase the closure. By default, this is
-        ///   [`dyn Any`][any] which is implemented by all `'static` types.
+        ///   [`dyn Any`](Any) which is implemented by all `'static` types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
-        ///
-        /// [any][Any]
         #[allow(dead_code)]
         pub struct $ty_name<B: FnPtr, S: ?Sized = dyn Any, A: JitAlloc> {
             thunk_info: ThunkInfo,
@@ -153,42 +196,25 @@ macro_rules! bare_closure_impl {
         unsafe impl<B: FnPtr, S: ?Sized, A: JitAlloc> Sync for $ty_name<B, S, A> {}
 
         impl<B: FnPtr, S: ?Sized, A: JitAlloc> $ty_name<B, S, A> {
-            /// Wraps `fun`, producing a bare function with calling convention
-            /// `cconv`.
+            /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
             /// Uses the provided JIT allocator to allocate the W^X memory used to create the thunk.
             #[allow(unused_variables)]
-            #[deprecated(since = "0.3.0", note = "please use `try_new_in` instead")]
-            pub fn with_jit_alloc<CC, F>(
+            pub fn try_with_cc_in<CC, F>(
                 cconv: CC,
                 fun: F,
                 jit_alloc: A,
             ) -> Result<Self, JitAllocError>
             where
-                F: ToBoxedUnsize<S>,
-                (CC, F): $trait_ident<B>,
-            {
-                Self::try_new_in(cconv, fun, jit_alloc)
-            }
-
-            /// Wraps `fun`, producing a bare function with calling convention
-            /// `cconv`.
-            ///
-            /// Uses the provided JIT allocator to allocate the W^X memory used to create the thunk.
-            #[allow(unused_variables)]
-            pub fn try_new_in<CC, F>(cconv: CC, fun: F, jit_alloc: A) -> Result<Self, JitAllocError>
-            where
-                F: ToBoxedUnsize<S>,
-                (CC, F): $trait_ident<B>,
+                F: $trait_ident<B, CC> + ToBoxedUnsize<S>,
             {
                 let storage = Box::into_raw(F::to_boxed_unsize(fun));
 
                 // SAFETY:
                 // - thunk_template pointer obtained from the correct source
                 // - `closure` is a valid pointer to `fun`
-                let thunk_info = unsafe {
-                    create_thunk(<(CC, F)>::$thunk_template, storage as *const _, &jit_alloc)?
-                };
+                let thunk_info =
+                    unsafe { create_thunk(F::$thunk_template, storage as *const _, &jit_alloc)? };
                 Ok(Self {
                     thunk_info,
                     jit_alloc,
@@ -197,21 +223,33 @@ macro_rules! bare_closure_impl {
                 })
             }
 
-            /// Wraps `fun`, producing a bare function with calling convention
-            /// `cconv`.
+            /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
             /// Uses `jit_alloc` to allocate the W^X memory used to create the thunk.
             ///
             /// # Panics
             /// If the provided JIT allocator fails to allocate memory. For a non-panicking
-            /// version, see `try_new_in`.
+            /// version, see `try_with_cc_in`.
             #[allow(unused_variables)]
-            pub fn new_in<CC, F>(cconv: CC, fun: F, jit_alloc: A) -> Self
+            pub fn with_cc_in<CC, F>(cconv: CC, fun: F, jit_alloc: A) -> Self
             where
-                F: ToBoxedUnsize<S>,
-                (CC, F): $trait_ident<B>,
+                F: $trait_ident<B, CC> + ToBoxedUnsize<S>,
             {
-                Self::try_new_in(cconv, fun, jit_alloc).unwrap()
+                Self::try_with_cc_in(cconv, fun, jit_alloc).unwrap()
+            }
+
+            /// Wraps `fun`, producing a bare function with signature `B`.
+            ///
+            /// Uses `jit_alloc` to allocate the W^X memory used to create the thunk.
+            ///
+            /// # Panics
+            /// If the provided JIT allocator fails to allocate memory. For a non-panicking
+            /// version, see `try_with_cc_in`.
+            pub fn new_in<F>(fun: F, jit_alloc: A) -> Self
+            where
+                F: $trait_ident<B, B::CC> + ToBoxedUnsize<S>,
+            {
+                Self::with_cc_in(B::CC::default(), fun, jit_alloc)
             }
 
             cc_shorthand_in!(new_c_in, $trait_ident, cc::C, "C");
@@ -328,16 +366,26 @@ macro_rules! bare_closure_impl {
 
         #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         impl<B: FnPtr, S: ?Sized> $ty_name<B, S, GlobalJitAlloc> {
+            /// Wraps `fun`, producing a bare function of signature `B`.
+            ///
+            /// The W^X memory required is allocated using the global JIT allocator.
+            #[inline]
+            pub fn new<F>(fun: F) -> Self
+            where
+                F: $trait_ident<B, B::CC> + ToBoxedUnsize<S>,
+            {
+                Self::new_in(fun, Default::default())
+            }
+
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
             /// The W^X memory required is allocated using the global JIT allocator.
             #[inline]
-            pub fn new<CC, F>(cconv: CC, fun: F) -> Self
+            pub fn with_cc<CC, F>(cconv: CC, fun: F) -> Self
             where
-                F: ToBoxedUnsize<S>,
-                (CC, F): $trait_ident<B>,
+                F: $trait_ident<B, CC> + ToBoxedUnsize<S>,
             {
-                Self::new_in(cconv, fun, Default::default())
+                Self::with_cc_in(cconv, fun, Default::default())
             }
 
             cc_shorthand!(new_c, $trait_ident, cc::C, "C");

@@ -1,6 +1,14 @@
 #![cfg(feature = "bundled_jit_alloc")]
 
-use closure_ffi::{BareFn, BareFnMut, BareFnOnce};
+use closure_ffi::{traits::FnPtr, BareFn, BareFnMut, BareFnOnce};
+
+#[test]
+fn test_infer_closure() {
+    let bare_closure: BareFn<'_, unsafe extern "C" fn(usize) -> u32>;
+    bare_closure = BareFn::new(|arg| arg as _);
+
+    assert_eq!(unsafe { bare_closure.bare().call((42,)) }, 42);
+}
 
 #[test]
 fn test_stateless_fn() {
@@ -13,7 +21,7 @@ fn test_stateless_fn() {
 #[test]
 fn test_borrow_fn() {
     let array = [0, 5, 10, 15, 20];
-    let bare_closure = BareFn::new_c(|n: usize| array[n]);
+    let bare_closure = BareFn::new_c(|n| array[n]);
 
     let bare = bare_closure.bare();
     assert_eq!(unsafe { bare(3) }, 15);
