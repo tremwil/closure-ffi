@@ -4,18 +4,20 @@ macro_rules! cc_thunk_impl_triple {
     ($cconv:ty, $cconv_lit:literal, ($($id_tys: ident,)*), ($($tuple_idx: tt,)*), ($($args:ident: $tys:ty,)*)) => {
         impl<R, $($id_tys),*> $crate::traits::FnPtr for unsafe extern $cconv_lit fn($($tys,)*) -> R {
             type CC = $cconv;
-            type Args<'a, 'b, 'c> = ($($tys,)*);
-            type Ret<'a, 'b, 'c> = R;
+            type Args<'a, 'b, 'c> = ($($tys,)*) where Self: 'a + 'b + 'c;
+            type Ret<'a, 'b, 'c> = R where Self: 'a + 'b + 'c;
 
             #[allow(unused_variables)]
             #[inline(always)]
-            unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c> {
+            unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>
+                where Self: 'a + 'b + 'c
+            {
                 unsafe { (self)($(args.$tuple_idx,)*) }
             }
         }
 
         unsafe impl<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>
-            $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R, $cconv> for F
+            $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE_ONCE: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
@@ -27,7 +29,7 @@ macro_rules! cc_thunk_impl_triple {
             };
         }
         unsafe impl<F: FnMut($($tys),*) -> R, R, $($id_tys),*>
-            $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R, $cconv> for F
+            $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE_MUT: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: FnMut($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
@@ -39,7 +41,7 @@ macro_rules! cc_thunk_impl_triple {
             };
         }
         unsafe impl<F: Fn($($tys),*) -> R, R, $($id_tys),*>
-            $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R, $cconv> for F
+            $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE: *const u8 = {
                 unsafe extern $cconv_lit fn thunk<F: Fn($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {

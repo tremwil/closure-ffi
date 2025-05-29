@@ -2,55 +2,77 @@ use std::str::FromStr;
 
 use proc_macro::TokenStream;
 use proc_macro2 as pm2;
-use quote::quote;
-use syn::{parse_macro_input, spanned::Spanned as _, visit_mut::VisitMut};
-
-// the Parse impl for syn::Generics ignores the where clause. This expects
-// it right after the generic parameters.
-struct GenericsWithWhere(syn::Generics);
-impl syn::parse::Parse for GenericsWithWhere {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(GenericsWithWhere({
-            let mut generics: syn::Generics = input.parse()?;
-            generics.where_clause = input.parse()?;
-            generics
-        }))
-    }
-}
+use quote::{quote, ToTokens};
+use syn::{parse_macro_input, visit::Visit, visit_mut::VisitMut};
 
 struct MacroInput {
-    attrs: Vec<syn::Attribute>,
-    generics: syn::Generics,
+    crate_path: syn::Path,
+    alias: syn::ItemType,
     bare_fn: syn::TypeBareFn,
 }
 
 impl syn::parse::Parse for MacroInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let all_attrs = input.call(syn::Attribute::parse_outer)?;
-        let mut attrs = Vec::new();
-        let mut generics = None;
+        let crate_path = input.parse()?;
+        let _: syn::Token![,] = input.parse()?;
+        let alias: syn::ItemType = input.parse()?;
 
-        for attr in all_attrs {
-            if !attr.path().is_ident("with") {
-                attrs.push(attr);
+        match &*alias.ty {
+            syn::Type::BareFn(bare_fn) => {
+                if let Some(lt) = &bare_fn.lifetimes {
+                    if lt.lifetimes.len() > 3 {
+                        return Err(syn::Error::new_spanned(
+                            &lt.lifetimes,
+                            "At most 3 higher-ranked lifetimes are supported",
+                        ));
+                    }
+                }
+
+                // Check that bare_fn has no implicit lifetimes
+                struct HasImplicitBoundLt(Vec<pm2::Span>);
+                impl<'a> Visit<'a> for HasImplicitBoundLt {
+                    fn visit_lifetime(&mut self, i: &'a syn::Lifetime) {
+                        if i.ident.to_string() == "_" {
+                            self.0.push(i.span());
+                        }
+                    }
+
+                    fn visit_type_reference(&mut self, i: &'a syn::TypeReference) {
+                        match i.lifetime {
+                            Some(_) => self.visit_type(&i.elem),
+                            None => self.0.push(i.and_token.span),
+                        }
+                    }
+                }
+                let mut implicit_lt_check = HasImplicitBoundLt(Vec::default());
+                implicit_lt_check.visit_type_bare_fn(bare_fn);
+
+                let mut implicit_lt_err = None;
+                for err_span in implicit_lt_check.0 {
+                    let err =
+                        syn::Error::new(err_span, "Implicit lifetimes are not permitted here");
+                    match implicit_lt_err.as_mut() {
+                        None => implicit_lt_err = Some(err),
+                        Some(e) => e.combine(err),
+                    }
+                }
+                match implicit_lt_err {
+                    Some(err) => Err(err),
+                    None => Ok(Self {
+                        crate_path,
+                        bare_fn: bare_fn.clone(),
+                        alias,
+                    }),
+                }
             }
-            else if generics.is_some() {
-                return Err(syn::Error::new_spanned(
-                    attr.path().get_ident(),
-                    "with attribute is already present",
-                ));
-            }
-            else {
-                let meta_list = attr.meta.require_list()?;
-                generics = Some(meta_list.parse_args::<GenericsWithWhere>()?.0);
-            }
+            other => Err(syn::Error::new_spanned(
+                other,
+                &format!(
+                    "Expected bare function type, got {}",
+                    other.to_token_stream().to_string()
+                ),
+            )),
         }
-
-        Ok(Self {
-            attrs,
-            generics: generics.unwrap_or_default(),
-            bare_fn: input.parse()?,
-        })
     }
 }
 
@@ -128,12 +150,12 @@ impl<F: FnMut(&mut syn::Lifetime)> syn::visit_mut::VisitMut for ReplaceLt<F> {
 #[proc_macro]
 pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(tokens as MacroInput);
+
     input
         .bare_fn
         .unsafety
         .get_or_insert(syn::Token![unsafe](pm2::Span::call_site()));
 
-    let attrs = &input.attrs;
     let bare_fn = &input.bare_fn;
 
     let thunk_ident = syn::Ident::new("thunk", pm2::Span::call_site());
@@ -165,6 +187,11 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
     .visit_signature_mut(&mut thunk_sig);
 
     let f_ident = syn::Ident::new("_F", pm2::Span::call_site());
+    let cc_marker_ident = syn::Ident::new(
+        &format!("_{}_CCMarker", &input.alias.ident),
+        pm2::Span::call_site(),
+    );
+    let crate_path = &input.crate_path;
 
     struct ImplDetails {
         thunk_trait_path: &'static str,
@@ -175,45 +202,52 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
 
     let impl_blocks: [ImplDetails; 3] = [
         ImplDetails {
-            thunk_trait_path: "::closure_ffi::thunk::FnOnceThunk",
+            thunk_trait_path: "traits::FnOnceThunk",
             fn_trait_path: "::core::ops::FnOnce",
             const_name: "THUNK_TEMPLATE_ONCE",
             body: quote! {
                 let closure_ptr: *mut #f_ident;
-                ::closure_ffi::arch::_thunk_asm!(closure_ptr);
-                ::closure_ffi::thunk::_never_inline(|| closure_ptr.read()(#(#arg_idents),*))
+                #crate_path::arch::_thunk_asm!(closure_ptr);
+                #crate_path::arch::_never_inline(|| closure_ptr.read()(#(#arg_idents),*))
             },
         },
         ImplDetails {
-            thunk_trait_path: "::closure_ffi::thunk::FnMutThunk",
+            thunk_trait_path: "traits::FnMutThunk",
             fn_trait_path: "::core::ops::FnMut",
             const_name: "THUNK_TEMPLATE_MUT",
             body: quote! {
                 let closure_ptr: *mut #f_ident;
-                ::closure_ffi::arch::_thunk_asm!(closure_ptr);
-                ::closure_ffi::thunk::_never_inline(|| (&mut *closure_ptr)(#(#arg_idents),*))
+                #crate_path::arch::_thunk_asm!(closure_ptr);
+                #crate_path::arch::_never_inline(|| (&mut *closure_ptr)(#(#arg_idents),*))
             },
         },
         ImplDetails {
-            thunk_trait_path: "::closure_ffi::thunk::FnThunk",
+            thunk_trait_path: "traits::FnThunk",
             fn_trait_path: "::core::ops::Fn",
             const_name: "THUNK_TEMPLATE",
             body: quote! {
                 let closure_ptr: *const #f_ident;
-                ::closure_ffi::arch::_thunk_asm!(closure_ptr);
-                ::closure_ffi::thunk::_never_inline(|| (&*closure_ptr)(#(#arg_idents),*))
+                #crate_path::arch::_thunk_asm!(closure_ptr);
+                #crate_path::arch::_never_inline(|| (&*closure_ptr)(#(#arg_idents),*))
             },
         },
     ];
+
+    let alias_ident = &input.alias.ident;
+    let alias_attrs = &input.alias.attrs;
+    let alias_vis = &input.alias.vis;
+    let alias_gen = &input.alias.generics;
+    let (alias_impl_gen, alias_ty_params, alias_where) = &input.alias.generics.split_for_impl();
 
     let impls = impl_blocks.iter().map(|impl_block| {
         let fn_bound =
             bare_fn_to_trait_bound(&input.bare_fn, path_from_str(impl_block.fn_trait_path));
         let const_ident = syn::Ident::new(impl_block.const_name, pm2::Span::call_site());
         let body = &impl_block.body;
-        let thunk_trait = path_from_str(impl_block.thunk_trait_path);
+        let mut thunk_trait = input.crate_path.clone();
+        thunk_trait.segments.extend(path_from_str(impl_block.thunk_trait_path).segments);
 
-        let mut generics = input.generics.clone();
+        let mut generics = input.alias.generics.clone();
         generics.params.push(syn::GenericParam::Type(syn::TypeParam {
             attrs: Default::default(),
             ident: f_ident.clone(),
@@ -230,8 +264,8 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
         let sig_tys = generics.type_params().map(|t| &t.ident);
 
         quote! {
-            unsafe impl #impl_generics #thunk_trait<_CustomThunk, #bare_fn>
-            for (_CustomThunk, #f_ident) #where_clause
+            unsafe impl #impl_generics #thunk_trait<#alias_ident #alias_ty_params>
+            for (#cc_marker_ident, #f_ident) #where_clause
             {
                 const #const_ident: *const ::core::primitive::u8 = {
                     #thunk_sig {
@@ -243,14 +277,101 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
         }
     });
 
-    quote! {{
-        #(#attrs)*
-        #[derive(::core::fmt::Debug, ::core::clone::Clone, ::core::marker::Copy)]
-        struct _CustomThunk;
+    let alias_ident_lit = syn::LitStr::new(&alias_ident.to_string(), pm2::Span::call_site());
+
+    let mut punc_impl_lifetimes =
+        bare_fn.lifetimes.as_ref().map(|lt| lt.lifetimes.clone()).unwrap_or_default();
+    punc_impl_lifetimes.extend((punc_impl_lifetimes.len()..3).map(|i| {
+        syn::GenericParam::Lifetime(syn::LifetimeParam::new(syn::Lifetime::new(
+            &format!("'_extra_{i}"),
+            pm2::Span::call_site(),
+        )))
+    }));
+    let impl_lifetimes: Vec<_> = punc_impl_lifetimes.iter().collect();
+
+    let tuple_args = bare_fn.inputs.iter().map(|i| &i.ty);
+    let bare_fn_output = match &bare_fn.output {
+        syn::ReturnType::Default => &syn::Type::Tuple(syn::TypeTuple {
+            paren_token: syn::token::Paren(pm2::Span::call_site()),
+            elems: syn::punctuated::Punctuated::new(),
+        }),
+        syn::ReturnType::Type(_, ty) => &*ty,
+    };
+    let arg_indices = (0..bare_fn.inputs.len() as u32).map(|index| {
+        syn::Member::Unnamed(syn::Index {
+            index,
+            span: pm2::Span::call_site(),
+        })
+    });
+
+    quote! {
+        #[derive(::core::fmt::Debug, ::core::clone::Clone, ::core::marker::Copy, ::core::default::Default)]
+        #[doc(hidden)]
+        struct #cc_marker_ident;
+
+        #(#alias_attrs)*
+        #[repr(transparent)]
+        #alias_vis struct #alias_ident #alias_gen (pub #bare_fn) #alias_where;
+
+        impl #alias_impl_gen #alias_ident #alias_ty_params #alias_where {
+            /// Returns an instance of the calling convention marker type for this bare function.
+            pub fn cc() -> #cc_marker_ident {
+                #cc_marker_ident::default()
+            }
+        }
+
+        impl #alias_impl_gen ::core::clone::Clone for #alias_ident #alias_ty_params #alias_where {
+            fn clone(&self) -> Self {
+                Self(self.0)
+            }
+        }
+
+        impl #alias_impl_gen ::core::marker::Copy for #alias_ident #alias_ty_params #alias_where {}
+
+        impl #alias_impl_gen ::core::fmt::Debug for #alias_ident #alias_ty_params #alias_where {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                f.debug_tuple(#alias_ident_lit)
+                    .field(&self.0)
+                    .finish()
+            }
+        }
+
+        impl #alias_impl_gen ::core::convert::From<#bare_fn> for #alias_ident #alias_ty_params #alias_where {
+            fn from(value: #bare_fn) -> Self {
+                Self(value)
+            }
+        }
+
+        impl #alias_impl_gen ::core::convert::Into<#bare_fn> for #alias_ident #alias_ty_params #alias_where {
+            fn into(self) -> #bare_fn {
+                self.0
+            }
+        }
+
+        impl #alias_impl_gen ::core::ops::Deref for #alias_ident #alias_ty_params #alias_where {
+            type Target = #bare_fn;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl #alias_impl_gen #crate_path::traits::FnPtr for #alias_ident #alias_ty_params #alias_where {
+            type CC = #cc_marker_ident;
+            type Args<#punc_impl_lifetimes> = (#(#tuple_args,)*) where Self: #(#impl_lifetimes)+*;
+            type Ret<#punc_impl_lifetimes> = #bare_fn_output where Self: #(#impl_lifetimes)+*;
+
+            unsafe fn call<#punc_impl_lifetimes>(
+                self,
+                args: Self::Args<#punc_impl_lifetimes>
+            ) -> Self::Ret<#punc_impl_lifetimes>
+                where Self: #(#impl_lifetimes)+*
+            {
+                (self.0)(#(args.#arg_indices,)*)
+            }
+        }
 
         #(#impls)*
-
-        _CustomThunk
-    }}
+    }
     .into()
 }

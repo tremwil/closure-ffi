@@ -1,3 +1,5 @@
+//! Traits that `closure-ffi` uses to power its functionality.
+
 #[cfg(feature = "no_std")]
 use alloc::boxed::Box;
 #[cfg(not(feature = "no_std"))]
@@ -77,35 +79,49 @@ pub trait FnPtr: Clone + Copy {
     /// The arguments of the function, as a tuple.
     ///
     /// This is a GAT with 3 independent lifetimes to support most higher-kinded bare functions.
-    type Args<'a, 'b, 'c>;
+    type Args<'a, 'b, 'c>
+    where
+        Self: 'a + 'b + 'c;
 
     /// The return type of the function.
     ///
     /// This is a GAT with 3 independent lifetimes to support most higher-kinded bare functions.
-    type Ret<'a, 'b, 'c>;
+    type Ret<'a, 'b, 'c>
+    where
+        Self: 'a + 'b + 'c;
 
     /// Calls self.
     ///
     /// # Safety
     /// The same function-specific safety invariants must be upheld as when calling it directly.
-    unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>;
+    unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>
+    where
+        Self: 'a + 'b + 'c;
 }
 
-/// Trait implemented by [`FnOnce`] closures used to generate a bare function thunk template,
+/// Trait implemented by (CC, [`FnOnce`]) tuples used to generate a bare function thunk template,
 /// where `CC` is a calling convention marker type.
-///
-/// We include `CC` in the type parameters even though it can be fetched from `B` has it enables
-/// much richer type inference in the construction API of [`BareFn`](crate::BareFn) and friends.
 ///
 /// # Safety
 /// This trait is internal to the library and is not meant to be directly implemented by downstream
 /// crates.
-pub unsafe trait FnOnceThunk<B: FnPtr, CC> {
+///
+/// # Why implement on tuples?
+/// Implenting on (calling-convention, closure) tuples instead of only the closure is done for two
+/// reasons:
+/// - It allows type-infering `B` from the calling convention and a closure with annotated
+///   parameters, which is highly desirable for the constructor API of [`BareFn`](crate::BareFn) and
+///   friends.
+/// - The [`bare_hrtb`](crate::bare_hrtb) macro can be used by downstream crates to generate
+///   implementations of this trait for specific higher-ranked bare functions. This is only possible
+///   if a local type is present in both the trait generic parameters and the implementor. By
+///   implementing on tuples, we can thus use a local type for the calling convention.
+pub unsafe trait FnOnceThunk<B: FnPtr> {
     /// Type-erased bare function thunk template calling `self` by move. Internal to the library.
     const THUNK_TEMPLATE_ONCE: *const u8;
 }
 
-/// Trait implemented by [`FnMut`] closures used to generate a bare function thunk template,
+/// Trait implemented by (CC, [`FnMut`]) tuples used to generate a bare function thunk template,
 /// where `CC` is a calling convention marker type.
 ///
 /// We include `CC` in the type parameters even though it can be fetched from `B` has it enables
@@ -114,13 +130,24 @@ pub unsafe trait FnOnceThunk<B: FnPtr, CC> {
 /// # Safety
 /// This trait is internal to the library and is not meant to be directly implemented by downstream
 /// crates.
-pub unsafe trait FnMutThunk<B: FnPtr, CC>: FnOnceThunk<B, CC> {
+///
+/// # Why implement on tuples?
+/// Implenting on (calling-convention, closure) tuples instead of only the closure is done for two
+/// reasons:
+/// - It allows type-infering `B` from the calling convention and a closure with annotated
+///   parameters, which is highly desirable for the constructor API of [`BareFn`](crate::BareFn) and
+///   friends.
+/// - The [`bare_hrtb`](crate::bare_hrtb) macro can be used by downstream crates to generate
+///   implementations of this trait for specific higher-ranked bare functions. This is only possible
+///   if a local type is present in both the trait generic parameters and the implementor. By
+///   implementing on tuples, we can thus use a local type for the calling convention.
+pub unsafe trait FnMutThunk<B: FnPtr>: FnOnceThunk<B> {
     /// Type-erased bare function thunk template calling `self` by mutable reference. Internal to
     /// the library.
     const THUNK_TEMPLATE_MUT: *const u8;
 }
 
-/// Trait implemented by [`Fn`] closures used to generate a bare function thunk template,
+/// Trait implemented by (CC, [`Fn`]) tuples used to generate a bare function thunk template,
 /// where `CC` is a calling convention marker type.
 ///
 /// We include `CC` in the type parameters even though it can be fetched from `B` has it enables
@@ -129,7 +156,18 @@ pub unsafe trait FnMutThunk<B: FnPtr, CC>: FnOnceThunk<B, CC> {
 /// # Safety
 /// This trait is internal to the library and is not meant to be directly implemented by downstream
 /// crates.
-pub unsafe trait FnThunk<B: FnPtr, CC>: FnMutThunk<B, CC> {
+///
+/// # Why implement on tuples?
+/// Implenting on (calling-convention, closure) tuples instead of only the closure is done for two
+/// reasons:
+/// - It allows type-infering `B` from the calling convention and a closure with annotated
+///   parameters, which is highly desirable for the constructor API of [`BareFn`](crate::BareFn) and
+///   friends.
+/// - The [`bare_hrtb`](crate::bare_hrtb) macro can be used by downstream crates to generate
+///   implementations of this trait for specific higher-ranked bare functions. This is only possible
+///   if a local type is present in both the trait generic parameters and the implementor. By
+///   implementing on tuples, we can thus use a local type for the calling convention.
+pub unsafe trait FnThunk<B: FnPtr>: FnMutThunk<B> {
     /// Type-erased bare function thunk template calling `self` by immutable reference. Internal to
     /// the library.
     const THUNK_TEMPLATE: *const u8;
