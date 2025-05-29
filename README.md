@@ -19,7 +19,7 @@ The crate comes with the following feature flags:
   statements), as well as the `bare_dyn` proc macro for writing `BareFn*` types of boxed 
   closures (i.e. `Box<dyn Fn()>`) more concisely. 
 - `unstable`: Enable the use of unstable Rust features for aspects of the crate that benefit from 
-  them. Currently, only 
+  them.
 - `full`: Enables `bundled_jit_alloc` and `proc_macros` features.
 
 # Examples
