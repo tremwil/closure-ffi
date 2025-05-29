@@ -368,6 +368,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             type Args<#punc_impl_lifetimes> = (#(#tuple_args,)*) where Self: #(#impl_lifetimes)+*;
             type Ret<#punc_impl_lifetimes> = #bare_fn_output where Self: #(#impl_lifetimes)+*;
 
+            #[inline(always)]
             unsafe fn call<#punc_impl_lifetimes>(
                 self,
                 args: Self::Args<#punc_impl_lifetimes>
@@ -375,6 +376,16 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
                 where Self: #(#impl_lifetimes)+*
             {
                 (self.0)(#(args.#arg_indices,)*)
+            }
+
+            #[inline(always)]
+            unsafe fn from_ptr(ptr: *const ()) -> Self {
+                unsafe { core::mem::transmute_copy(&ptr) }
+            }
+
+            #[inline(always)]
+            fn to_ptr(self) -> *const () {
+                self.0 as *const _
             }
         }
 

@@ -57,7 +57,7 @@ impl<'a, B: FnPtr> Hook<'a, B> {
         // For the purpose of type inference tests, give out a dangling original `B`
         // (We will not call it)
         HookCtx {
-            original: unsafe { core::mem::transmute_copy::<*const u8, _>(&core::ptr::dangling()) },
+            original: unsafe { B::from_ptr(core::ptr::dangling()) },
             phantom: PhantomData,
         }
     }
