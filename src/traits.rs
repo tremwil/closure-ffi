@@ -77,7 +77,7 @@ impl<T: ?Sized, U: core::marker::Unsize<T>> ToBoxedUnsize<T> for U {
 /// - When implemented on a non-function pointer type that is `#[repr(transparent)]` to a function
 ///   pointer, all associated types ([`CC`][`FnPtr::CC`], [`Args`](FnPtr::Args) and
 ///   [`Ret`](FnPtr::Ret)) must be consistent with the function pointer.
-pub unsafe trait FnPtr: Clone + Copy {
+pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
     /// Calling convention of the bare function, as a ZST marker type.
     type CC: Default;
 
