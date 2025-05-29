@@ -14,16 +14,18 @@ The crate comes with the following feature flags:
   crate. This is enabled by default.
 - `custom_jit_alloc`: Allows providing a global JIT allocator through the `global_jit_alloc!` macro.
   **This is incompatible with `bundled_jit_alloc`**.
-- `proc_macros`: Provides the `cc::hrtb` proc macro which is necessary for creating bare
+- `proc_macros`: Provides the `bare_hrtb` proc macro which is necessary for creating bare
   functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>`
   statements), as well as the `bare_dyn` proc macro for writing `BareFn*` types of boxed 
   closures (i.e. `Box<dyn Fn()>`) more concisely. 
-- `full`: Enables all features except for `no_std`.
+- `unstable`: Enable the use of unstable Rust features for aspects of the crate that benefit from 
+  them. Currently, only 
+- `full`: Enables `bundled_jit_alloc` and `proc_macros` features.
 
 # Examples
 Passing a closure to a C API taking a contextless function pointer:
 ```rust
-use closure_ffi::{cc, BareFnMut};
+use closure_ffi::{BareFnMut};
 // Imagine we have an foreign C API for reigstering and unregistering some callback function.
 // Notably, the API does not let the user provide a context object to the callback.
 unsafe extern "C" fn ffi_register_callback(cb: unsafe extern "C" fn(u32)) {
@@ -38,7 +40,7 @@ unsafe extern "C" fn ffi_unregister_callback(cb: unsafe extern "C" fn(u32)) {
     // We want to keep track of sum of callback arguments without using 
     // statics. This is where closure-ffi comes in:
     let mut sum = 0; // Non-'static closures work too!
-    let wrapped = BareFnMut::new(cc::C, |x: u32| {
+    let wrapped = BareFnMut::new_c(|x: u32| {
         sum += x;
     });
 

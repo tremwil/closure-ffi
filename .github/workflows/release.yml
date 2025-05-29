@@ -28,7 +28,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
+      
+      - name: crates.io publish
+        run: cargo +nightly -Z package-workspace publish --workspace --token ${{ secrets.CRATES_IO_TOKEN }}
+        
       - name: Get package version
         id: get_version
         run: echo "version=$(python ./.github/scripts/package_version.py)" >> "$GITHUB_OUTPUT"
@@ -36,13 +39,8 @@ jobs:
       - name: Generate release notes
         run: python ./.github/scripts/release_notes.py > release-notes.md
 
-      - uses: actions/checkout@v4
-      - name: crates.io publish
-        run: cargo +nightly -Z package-workspace publish --workspace --token ${{ secrets.CRATES_IO_TOKEN }}
-      
       - name: GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          files: arxan-disabler-${{ github.ref_name }}.zip
+          tag_name: v${{ steps.get_version.outputs.version }}
           body_path: release-notes.md
