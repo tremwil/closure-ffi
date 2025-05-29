@@ -210,7 +210,6 @@ macro_rules! bare_closure_impl {
         /// closure which exposes a bare function thunk that can invoke it without
         /// additional arguments.
         ///
-        /// # Note
         /// This is a generic implementation which allows customizing the closure's
         /// type erased storage, which allows enforcing trait bounds like `Send` and `Sync` when
         /// needed. However, this plays poorly with type inference. Consider using the
@@ -223,8 +222,9 @@ macro_rules! bare_closure_impl {
         /// - `B`: The bare function pointer to expose the closure as. For higher-kinded bare
         ///   function pointers, you will need to use the [`bare_hrtb`] macro to define a wrapper
         ///   type.
-        /// - `S`: The dynamically-sized type to use to type-erase the closure. By default, this is
-        ///   [`dyn Any`](Any) which is implemented by all `'static` types.
+        /// - `S`: The dynamically-sized type to use to type-erase the closure. Without the
+        ///   `unstable` feature, this is limited to [`dyn Any`](Any) and combinations of [`Send`]
+        ///   and [`Sync`] marker types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
         #[allow(dead_code)]
         pub struct $ty_name<B: FnPtr, S: ?Sized, A: JitAlloc> {
