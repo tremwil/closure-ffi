@@ -87,6 +87,7 @@ macro_rules! bare_hrtb {
 #[cfg(feature = "proc_macros")]
 pub use bare_hrtb;
 
+#[allow(unused_macros)]
 macro_rules! cc_shorthand {
     ($fn_name:ident, $trait_ident:ident, $cc_ty:ty, $cc_name:literal $(,$cfg:meta)?) => {
         $(#[cfg(any($cfg, doc))])?
@@ -167,7 +168,7 @@ macro_rules! bare_closure_impl {
         ///   [`dyn Any`](Any) which is implemented by all `'static` types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
         #[allow(dead_code)]
-        pub struct $ty_name<B: FnPtr, S: ?Sized = dyn Any, A: JitAlloc = GlobalJitAlloc> {
+        pub struct $ty_name<B: FnPtr, S: ?Sized, A: JitAlloc = GlobalJitAlloc> {
             thunk_info: ThunkInfo,
             jit_alloc: A,
             // We can't directly own the closure, even through an UnsafeCell.
@@ -202,7 +203,7 @@ macro_rules! bare_closure_impl {
         ///   [`dyn Any`](Any) which is implemented by all `'static` types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
         #[allow(dead_code)]
-        pub struct $ty_name<B: FnPtr, S: ?Sized = dyn Any, A: JitAlloc> {
+        pub struct $ty_name<B: FnPtr, S: ?Sized, A: JitAlloc> {
             thunk_info: ThunkInfo,
             jit_alloc: A,
             storage: *mut S,
