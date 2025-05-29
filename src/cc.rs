@@ -2,7 +2,7 @@
 
 macro_rules! cc_thunk_impl_triple {
     ($cconv:ty, $cconv_lit:literal, ($($id_tys: ident,)*), ($($tuple_idx: tt,)*), ($($args:ident: $tys:ty,)*)) => {
-        impl<R, $($id_tys),*> $crate::traits::FnPtr for unsafe extern $cconv_lit fn($($tys,)*) -> R {
+        unsafe impl<R, $($id_tys),*> $crate::traits::FnPtr for unsafe extern $cconv_lit fn($($tys,)*) -> R {
             type CC = $cconv;
             type Args<'a, 'b, 'c> = ($($tys,)*) where Self: 'a + 'b + 'c;
             type Ret<'a, 'b, 'c> = R where Self: 'a + 'b + 'c;

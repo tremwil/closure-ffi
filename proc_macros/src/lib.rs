@@ -188,7 +188,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
 
     let f_ident = syn::Ident::new("_F", pm2::Span::call_site());
     let cc_marker_ident = syn::Ident::new(
-        &format!("_{}_CCMarker", &input.alias.ident),
+        &format!("{}_CC", &input.alias.ident),
         pm2::Span::call_site(),
     );
     let crate_path = &input.crate_path;
@@ -278,6 +278,10 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
     });
 
     let alias_ident_lit = syn::LitStr::new(&alias_ident.to_string(), pm2::Span::call_site());
+    let alias_ident_doc_lit = syn::LitStr::new(
+        &format!("[`{}`].", alias_ident.to_string()),
+        pm2::Span::call_site(),
+    );
 
     let mut punc_impl_lifetimes =
         bare_fn.lifetimes.as_ref().map(|lt| lt.lifetimes.clone()).unwrap_or_default();
@@ -305,9 +309,10 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
     });
 
     quote! {
+        /// Calling convention marker type for higher-ranked bare function wrapper type
+        #[doc = #alias_ident_doc_lit]
         #[derive(::core::fmt::Debug, ::core::clone::Clone, ::core::marker::Copy, ::core::default::Default)]
-        #[doc(hidden)]
-        struct #cc_marker_ident;
+        #alias_vis struct #cc_marker_ident;
 
         #(#alias_attrs)*
         #[repr(transparent)]
@@ -356,7 +361,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             }
         }
 
-        impl #alias_impl_gen #crate_path::traits::FnPtr for #alias_ident #alias_ty_params #alias_where {
+        unsafe impl #alias_impl_gen #crate_path::traits::FnPtr for #alias_ident #alias_ty_params #alias_where {
             type CC = #cc_marker_ident;
             type Args<#punc_impl_lifetimes> = (#(#tuple_args,)*) where Self: #(#impl_lifetimes)+*;
             type Ret<#punc_impl_lifetimes> = #bare_fn_output where Self: #(#impl_lifetimes)+*;

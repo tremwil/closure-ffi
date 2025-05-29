@@ -64,6 +64,7 @@ bare_hrtb! {
 
 #[test]
 fn test_generic_hrtb() {
+    // alternatively: let bare_closure = BareFn::with_cc(MyGenericFn_CC, |opt| opt.as_ref());
     let bare_closure = BareFn::<MyGenericFn<_>>::new(|opt| opt.as_ref());
 
     // Ensure that the function is truly lifetime generic (this would fail without cc::hrtb)

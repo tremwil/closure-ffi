@@ -72,7 +72,11 @@ impl<T: ?Sized, U: core::marker::Unsize<T>> ToBoxedUnsize<T> for U {
 /// functions. For these, use the [`bare_hrtb!`](crate::bare_hrtb) macro to create a transparent
 /// wrapper type which implements the trait. Furthermore, the trait cannot be implemented *at all*
 /// for higher-kinded bare functions which have more than 3 independent lifetimes.
-pub trait FnPtr: Clone + Copy {
+///
+/// # Safety
+/// This trait *must not* be implemented on a type that is not `#[repr(transparent]` with a function
+/// pointer, i.e. has a different size/alignment.
+pub unsafe trait FnPtr: Clone + Copy {
     /// Calling convention of the bare function, as a ZST marker type.
     type CC: Default;
 
@@ -99,7 +103,7 @@ pub trait FnPtr: Clone + Copy {
         Self: 'a + 'b + 'c;
 }
 
-/// Trait implemented by (CC, [`FnOnce`]) tuples used to generate a bare function thunk template,
+/// Trait implemented by (`CC`, [`FnOnce`]) tuples used to generate a bare function thunk template,
 /// where `CC` is a calling convention marker type.
 ///
 /// # Safety
@@ -121,7 +125,7 @@ pub unsafe trait FnOnceThunk<B: FnPtr> {
     const THUNK_TEMPLATE_ONCE: *const u8;
 }
 
-/// Trait implemented by (CC, [`FnMut`]) tuples used to generate a bare function thunk template,
+/// Trait implemented by (`CC`, [`FnMut`]) tuples used to generate a bare function thunk template,
 /// where `CC` is a calling convention marker type.
 ///
 /// We include `CC` in the type parameters even though it can be fetched from `B` has it enables
@@ -147,7 +151,7 @@ pub unsafe trait FnMutThunk<B: FnPtr>: FnOnceThunk<B> {
     const THUNK_TEMPLATE_MUT: *const u8;
 }
 
-/// Trait implemented by (CC, [`Fn`]) tuples used to generate a bare function thunk template,
+/// Trait implemented by (`CC`, [`Fn`]) tuples used to generate a bare function thunk template,
 /// where `CC` is a calling convention marker type.
 ///
 /// We include `CC` in the type parameters even though it can be fetched from `B` has it enables
