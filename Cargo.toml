@@ -20,6 +20,10 @@ categories.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[example]]
+name = "context_hooking"
+crate-type = ["lib"]
+
 [features]
 default = [ "bundled_jit_alloc" ]
 no_std = [ "spin" ]
