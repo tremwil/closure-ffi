@@ -1,7 +1,7 @@
 mod slab_alloc;
 
 #[allow(unused_imports)]
-use closure_ffi::{BareFn, BareFnMut, BareFnOnce};
+use closure_ffi::{cc, BareFn, BareFnMut, BareFnOnce};
 use slab_alloc::SlabAlloc;
 
 #[cfg(not(feature = "no_std"))]
@@ -150,4 +150,19 @@ fn test_double_free() {
     // call FnItem as-is again:
     assert_eq!(42, f());
     println!("test FnPtr - done");
+}
+
+#[cfg(not(feature = "no_std"))]
+#[test]
+fn test_unwind_fn() {
+    let capture = 42usize;
+    let bare_closure = BareFn::with_cc(cc::CUnwind, |arg| assert_eq!(arg, capture));
+    let bare = bare_closure.bare();
+
+    // OK
+    unsafe { bare(42) };
+
+    // Panics, see if we unwind across the boundary
+    let result = std::panic::catch_unwind(|| unsafe { bare(0) });
+    assert!(result.is_err())
 }

@@ -123,16 +123,29 @@ macro_rules! cc_impl {
 }
 
 cc_impl!(C, "C");
+cc_impl!(CUnwind, "C-unwind");
 
 cc_impl!(System, "system");
+cc_impl!(SystemUnwind, "system-unwind");
 
 cc_impl!(Sysv64, "sysv64", all(not(windows), target_arch = "x86_64"));
+cc_impl!(
+    Sysv64Unwind,
+    "sysv64-unwind",
+    all(not(windows), target_arch = "x86_64")
+);
 
 cc_impl!(Aapcs, "aapcs", target_arch = "arm");
+cc_impl!(AapcsUnwind, "aapcs-unwind", target_arch = "arm");
 
 cc_impl!(
     Fastcall,
     "fastcall",
+    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+);
+cc_impl!(
+    FastcallUnwind,
+    "fastcall-unwind",
     all(windows, any(target_arch = "x86_64", target_arch = "x86"))
 );
 
@@ -141,13 +154,33 @@ cc_impl!(
     "stdcall",
     all(windows, any(target_arch = "x86_64", target_arch = "x86"))
 );
+cc_impl!(
+    StdcallUnwind,
+    "stdcall-unwind",
+    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+);
 
 cc_impl!(
     Cdecl,
     "cdecl",
     all(windows, any(target_arch = "x86_64", target_arch = "x86"))
 );
+cc_impl!(
+    CdeclUnwind,
+    "cdecl-unwind",
+    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+);
 
 cc_impl!(Thiscall, "thiscall", all(windows, target_arch = "x86"));
+cc_impl!(
+    ThiscallUnwind,
+    "thiscall-unwind",
+    all(windows, target_arch = "x86")
+);
 
 cc_impl!(Win64, "win64", all(windows, target_arch = "x86_64"));
+cc_impl!(
+    Win64Unwind,
+    "win64-unwind",
+    all(windows, target_arch = "x86_64")
+);
