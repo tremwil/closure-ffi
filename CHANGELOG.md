@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2025-05-29
+## [v2.0.0] - 2025-05-29
 
 First stable release. `1.0.0` was skipped as significant changes to the API were made since the last
 release.
@@ -32,7 +32,7 @@ release.
 ### Added
 - `unstable` feature enabling support for functionality locked behind unstable Rust features.
 
-## [0.5.0] - 2025-04-29
+## [v0.5.0] - 2025-04-29
 
 ### Breaking Changes
 - Changes to the `JitAlloc` API: `flush_instruction_cache` and `protect_jit_memory` now take `&self`
@@ -48,7 +48,7 @@ release.
 - Stop using .text relocations in asm thunks for compatiblity with platforms where they are not allowed
   (e.g. MacOS). Relocations are still used when `target_arch = "x86"`. (Fixes #5)
 
-## [0.4.0] - 2025-04-27
+## [v0.4.0] - 2025-04-27
 
 ### Added
 - CI checks
