@@ -49,8 +49,10 @@ impl syn::parse::Parse for MacroInput {
 
                 let mut implicit_lt_err = None;
                 for err_span in implicit_lt_check.0 {
-                    let err =
-                        syn::Error::new(err_span, "Implicit lifetimes are not permitted here");
+                    let err = syn::Error::new(
+                        err_span,
+                        "Implicit lifetimes are not permitted; you must name this lifetime",
+                    );
                     match implicit_lt_err.as_mut() {
                         None => implicit_lt_err = Some(err),
                         Some(e) => e.combine(err),

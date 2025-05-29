@@ -360,6 +360,7 @@ pub use bundled_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
 /// UB, and you are responsible to make sure this doesn't happen.
 #[macro_export]
 #[cfg(any(docsrs, feature = "custom_jit_alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "custom_jit_alloc")))]
 macro_rules! global_jit_alloc {
     ($static_var:path) => {
         #[no_mangle]
@@ -377,6 +378,7 @@ macro_rules! global_jit_alloc {
     };
 }
 #[cfg(any(docsrs, feature = "custom_jit_alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "custom_jit_alloc")))]
 pub use global_jit_alloc;
 
 #[cfg(feature = "custom_jit_alloc")]

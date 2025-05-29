@@ -51,4 +51,4 @@ clear-cache = "0.1.1"
 
 [package.metadata.docs.rs]
 features = ["full"]
-rustc-args = ["--cfg docsrs"]
+rustdoc-args = ["--cfg", "docsrs"]
