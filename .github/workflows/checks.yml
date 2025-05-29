@@ -26,18 +26,23 @@ jobs:
           - --no-default-features -F custom_jit_alloc,no_std
           - -F full
           - -F full,no_std
+          - -F full,unstable
+        include:
+          - cargo: cargo
+          - features: -F full,unstable
+            cargo: cargo +nightly
 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cargo check --workspace ${{ matrix.features }}
+      - run: ${{ matrix.cargo }} check --workspace ${{ matrix.features }}
 
   doc:
     name: cargo doc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cargo +nightly doc -F full,build-docs
+      - run: RUSTFLAGS="--cfg docsrs" cargo +nightly doc -F full
 
   build_and_test:
     strategy:

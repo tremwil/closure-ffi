@@ -125,13 +125,10 @@ impl<J: JitAlloc, R: spin::RelaxStrategy> JitAlloc for spin::lazy::Lazy<J, fn() 
 ///
 /// When the `bundled_jit_alloc` feature is enabled, this is currently implemented as a ZST
 /// deffering to a static [`jit_allocator::JitAllocator`] behind a [`std::sync::Mutex`] (or a
-/// [`spin::Mutex`] under `no_std`).
+/// [`spin::Mutex`](https://docs.rs/spin/0.9/spin/type.Mutex.html) under `no_std`).
 ///
 /// When the `custom_jit_alloc` feature is enabled, defers to a [`JitAlloc`] implementation
 /// provided by a downstream crate using the [`global_jit_alloc`] macro.
-///
-/// [`spin::Mutex`]: https://docs.rs/spin/0.9/spin/type.Mutex.html
-/// [`global_jit_alloc`]: crate::global_jit_alloc
 #[derive(Default, Clone, Copy)]
 pub struct GlobalJitAlloc;
 
@@ -287,7 +284,7 @@ mod bundled_jit_alloc {
     }
 
     #[cfg(not(feature = "no_std"))]
-    mod thread_jit_alloc {
+    pub(super) mod thread_jit_alloc {
         use core::{cell::UnsafeCell, marker::PhantomData};
 
         use jit_allocator::JitAllocator;
@@ -335,15 +332,14 @@ mod bundled_jit_alloc {
             }
         }
     }
-    #[cfg(not(feature = "no_std"))]
-    pub use thread_jit_alloc::*;
 }
-#[cfg(feature = "bundled_jit_alloc")]
-pub use bundled_jit_alloc::*;
+#[cfg(all(feature = "bundled_jit_alloc", not(feature = "no_std")))]
+#[doc(inline)]
+pub use bundled_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
 
 /// Defines a global [`JitAlloc`] implementation which [`GlobalJitAlloc`] will defer to.
 ///
-/// The macro can either take a path to a static variable or an expression resolving to a
+/// The macro can either take a path to a static variable or an unsafe block resolving to a
 /// `&'static JitAlloc`:
 ///
 /// ```ignore
@@ -354,31 +350,35 @@ pub use bundled_jit_alloc::*;
 /// ```ignore
 /// use std::sync::OnceLock;
 ///
-/// global_jit_alloc!({
+/// global_jit_alloc!(unsafe {
 ///     static WRAPPED_JIT: OnceLock<MyJitAlloc> = OnceLock::new();
 ///     WRAPPED_JIT.get_or_init(|| MyJitAlloc::new())
 /// });
 /// ```
+///
+/// The block form must be marked with `unsafe` as sometimes returning a different impl can lead to
+/// UB, and you are responsible to make sure this doesn't happen.
 #[macro_export]
-#[cfg(any(feature = "custom_jit_alloc", feature = "build-docs"))]
-#[cfg_attr(feature = "build-docs", doc(cfg(feature = "custom_jit_alloc")))]
+#[cfg(any(docsrs, feature = "custom_jit_alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "custom_jit_alloc")))]
 macro_rules! global_jit_alloc {
     ($static_var:path) => {
         #[no_mangle]
         extern "Rust" fn _closure_ffi__global_jit_alloc(
-        ) -> &'static dyn $crate::jit_alloc::JitAlloc {
+        ) -> &'static (dyn $crate::jit_alloc::JitAlloc + Sync) {
             &$static_var
         }
     };
-    ($provider:expr) => {
+    (unsafe $provider:block) => {
         #[no_mangle]
         extern "Rust" fn _closure_ffi__global_jit_alloc(
-        ) -> &'static dyn $crate::jit_alloc::JitAlloc {
-            $provider
+        ) -> &'static (dyn $crate::jit_alloc::JitAlloc + Sync) {
+            unsafe { $provider }
         }
     };
 }
-#[cfg(feature = "custom_jit_alloc")]
+#[cfg(any(docsrs, feature = "custom_jit_alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "custom_jit_alloc")))]
 pub use global_jit_alloc;
 
 #[cfg(feature = "custom_jit_alloc")]
@@ -386,7 +386,7 @@ mod custom_jit_alloc {
     use super::{GlobalJitAlloc, JitAlloc, JitAllocError, ProtectJitAccess};
 
     extern "Rust" {
-        fn _closure_ffi__global_jit_alloc() -> &'static dyn JitAlloc;
+        fn _closure_ffi__global_jit_alloc() -> &'static (dyn JitAlloc + Sync);
     }
 
     fn get_global_jit_alloc() -> &'static dyn JitAlloc {
