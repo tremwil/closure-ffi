@@ -1,6 +1,9 @@
 //! This example shows how one can design the user-facing interface function hooking library with
 //! excellent type inference and support for capturing closures using `closure-ffi`.
 
+// This example will not compile without the bundled JIT allocator.
+#![cfg(feature = "bundled_jit_alloc")]
+
 use core::marker::PhantomData;
 
 use closure_ffi::{

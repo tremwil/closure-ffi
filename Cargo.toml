@@ -23,6 +23,7 @@ repository.workspace = true
 [[example]]
 name = "context_hooking"
 crate-type = ["lib"]
+test = true
 
 [features]
 default = [ "bundled_jit_alloc" ]
