@@ -156,7 +156,7 @@ fn test_double_free() {
 #[test]
 fn test_unwind_fn() {
     let capture = 42usize;
-    let bare_closure = BareFn::with_cc(cc::CUnwind, |arg| assert_eq!(arg, capture));
+    let bare_closure = BareFn::with_cc_in(cc::CUnwind, |arg| assert_eq!(arg, capture), &SLAB);
     let bare = bare_closure.bare();
 
     // OK
