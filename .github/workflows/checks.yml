@@ -3,7 +3,7 @@ on:
   push:
     branches: [dev]
   pull_request:
-    branches: [dev]
+    branches-ignore: [master]
 
 jobs:
   fmt:
@@ -28,11 +28,9 @@ jobs:
           - -F full,no_std
           - -F full,unstable
         include:
+          - cargo: cargo
           - features: -F full,unstable
             cargo: cargo +nightly
-        exclude:
-          - features: -F full,unstable
-            cargo: cargo
 
     runs-on: ubuntu-latest
     steps:
