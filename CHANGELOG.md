@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `from_ptr` and `to_ptr` methods to `FnPtr` trait, to avoid relying on `transmute_copy`
 - `Send` and `Sync` supertraits on `FnPtr`
+- Support for `C-unwind` and other `-unwind` calling conventions
 
 ## [v2.0.1] - 2025-05-29
 
