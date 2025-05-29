@@ -14,6 +14,16 @@ macro_rules! cc_thunk_impl_triple {
             {
                 unsafe { (self)($(args.$tuple_idx,)*) }
             }
+
+            #[inline(always)]
+            unsafe fn from_ptr(ptr: *const ()) -> Self {
+                unsafe { core::mem::transmute_copy(&ptr) }
+            }
+
+            #[inline(always)]
+            fn to_ptr(self) -> *const () {
+                self as *const _
+            }
         }
 
         unsafe impl<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>

@@ -71,8 +71,12 @@ impl<T: ?Sized, U: core::marker::Unsize<T>> ToBoxedUnsize<T> for U {
 /// for higher-kinded bare functions which have more than 3 independent lifetimes.
 ///
 /// # Safety
-/// This trait *must not* be implemented on a type that is not `#[repr(transparent]` with a function
-/// pointer, i.e. has a different size/alignment.
+/// - The trait *must not* be implemented on a type that is not `#[repr(transparent)]` with a
+///   function pointer, i.e. has a different size/alignment.
+///
+/// - When implemented on a non-function pointer type that is `#[repr(transparent)]` to a function
+///   pointer, all associated types ([`CC`][`FnPtr::CC`], [`Args`](FnPtr::Args) and
+///   [`Ret`](FnPtr::Ret)) must be consistent with the function pointer.
 pub unsafe trait FnPtr: Clone + Copy {
     /// Calling convention of the bare function, as a ZST marker type.
     type CC: Default;
@@ -98,6 +102,15 @@ pub unsafe trait FnPtr: Clone + Copy {
     unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>
     where
         Self: 'a + 'b + 'c;
+
+    /// Creates `Self` from an untyped pointer.
+    ///
+    /// # Safety
+    /// The untyped pointer must point to a valid instance of `Self`.
+    unsafe fn from_ptr(ptr: *const ()) -> Self;
+
+    /// Casts `self` to an untyped pointer.
+    fn to_ptr(self) -> *const ();
 }
 
 /// Trait implemented by (`CC`, [`FnOnce`]) tuples used to generate a bare function thunk template,

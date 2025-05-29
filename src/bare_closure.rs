@@ -381,7 +381,7 @@ macro_rules! bare_closure_impl {
             #[inline]
             pub fn bare(self: $bare_receiver) -> B {
                 // SAFETY: B is a bare function pointer
-                unsafe { core::mem::transmute_copy(&self.thunk_info.thunk) }
+                unsafe { B::from_ptr(self.thunk_info.thunk) }
             }
 
             /// Leak the underlying closure, returning the unsafe bare function pointer that invokes
@@ -400,7 +400,7 @@ macro_rules! bare_closure_impl {
             {
                 let no_drop = ManuallyDrop::new(self);
                 // SAFETY: B is a bare function pointer
-                unsafe { core::mem::transmute_copy(&no_drop.thunk_info.thunk) }
+                unsafe { B::from_ptr(no_drop.thunk_info.thunk) }
             }
         }
 
