@@ -5,13 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2025-05-28
+## [2.0.0] - 2025-05-29
 
 ### Breaking changes
 - Changes to the trait system: bare function parameters now implement the `FnPtr` trait, which 
   was carefully re-designed after attempting to build a function hooking library around `closure-ffi`.
   This required changes to the way higher-kinded bare functions are supported; see the doc for the new 
   `bare_hrtb!` proc macro to learn more.
+
+- Moved traits to the `traits` module. All traits used are now fully documented, including the `Fn*Thunk`
+  traits used to generate the bare function thunks. This allows building a function-generic API that makes
+  use of closure-ffi internally. 
 
 - Sweeping changes to the `BareFn*` generic parameters. The `BareFn*` types now type erase the closure,
   removing the need for the `bare_dyn` macro (which was not ideal as it would add an uncessary layer of 
@@ -39,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Stop using .text relocations in asm thunks for compatiblity with platforms where they are not allowed
-  (e.g. MacOS). relocations are still used when `target_arch = "x86"`. (Fixes #5)
+  (e.g. MacOS). Relocations are still used when `target_arch = "x86"`. (Fixes #5)
 
 ## [0.4.0] - 2025-04-27
 
