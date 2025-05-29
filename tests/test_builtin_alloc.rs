@@ -1,5 +1,6 @@
 #![cfg(feature = "bundled_jit_alloc")]
 
+#[allow(unused_imports)]
 use closure_ffi::{traits::FnPtr, BareFn, BareFnMut, BareFnOnce};
 
 #[test]

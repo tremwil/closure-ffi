@@ -18,6 +18,12 @@ compile_error!("only one of bundled_jit_alloc or custom_jit_alloc may be specifi
 #[cfg(feature = "no_std")]
 extern crate alloc;
 
+// Provide a no_std agnostic `Box` import for other modules
+#[cfg(feature = "no_std")]
+pub(crate) use alloc::boxed::Box;
+#[cfg(not(feature = "no_std"))]
+pub(crate) use std::boxed::Box;
+
 #[doc(hidden)]
 pub mod arch;
 

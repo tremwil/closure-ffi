@@ -2,15 +2,21 @@
 #![cfg_attr(feature = "no_std", no_std)]
 #![allow(improper_ctypes_definitions)]
 
-#[cfg(feature = "no_std")]
-extern crate alloc;
-#[cfg(feature = "no_std")]
-use alloc::boxed::Box;
-
 use closure_ffi::{bare_closure::bare_hrtb, BareFn, BareFnMut};
 
 bare_hrtb! {
     type MyFn = for<'a, 'b> extern "C" fn(&'a str, &'b str) -> &'a str;
+}
+
+// Derefs to a `&str` whose lifetime is bounded. Goal is to prevent static promotion to make these
+// tests really ensure the lifetime is different
+struct MyStr(&'static str);
+impl core::ops::Deref for MyStr {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
 }
 
 #[test]
@@ -18,9 +24,9 @@ fn test_basic_hrtb() {
     let ignore_y = BareFn::<MyFn>::new(|x, _y| x);
 
     fn do_test(bare_fn: for<'a, 'b> unsafe extern "C" fn(&'a str, &'b str) -> &'a str) {
-        let foo = "foo".to_string();
+        let foo = MyStr("foo");
         let result = {
-            let bar = "bar".to_string();
+            let bar = MyStr("bar");
             unsafe { bare_fn(&foo, &bar) }
         };
         assert_eq!(result, "foo");
@@ -36,10 +42,10 @@ bare_hrtb! {
 #[test]
 fn test_non_static_hrtb() {
     const STATIC_STR: &'static str = "xyz";
-    let owned_str1 = "foo".to_string();
-    let owned_str2 = "bar".to_string();
+    let owned_str1 = MyStr("foo");
+    let owned_str2 = MyStr("bar");
 
-    let mut ref_str = owned_str1.as_str();
+    let mut ref_str: &str = &owned_str1;
 
     let bare_closure = BareFnMut::<MyFnLt>::new(|x, y| {
         ref_str = x;
@@ -55,7 +61,7 @@ fn test_non_static_hrtb() {
     }
 
     drop(bare_closure);
-    assert_eq!(ref_str, owned_str2);
+    assert_eq!(ref_str, &*owned_str2);
 }
 
 bare_hrtb! {

@@ -1,9 +1,6 @@
 //! Traits that `closure-ffi` uses to power its functionality.
 
-#[cfg(feature = "no_std")]
-use alloc::boxed::Box;
-#[cfg(not(feature = "no_std"))]
-use std::boxed::Box;
+use crate::Box;
 
 /// Dummy trait implemented by every type.
 ///

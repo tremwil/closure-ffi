@@ -1,5 +1,6 @@
 mod slab_alloc;
 
+#[allow(unused_imports)]
 use closure_ffi::{BareFn, BareFnMut, BareFnOnce};
 use slab_alloc::SlabAlloc;
 

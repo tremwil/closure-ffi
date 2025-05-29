@@ -15,6 +15,7 @@ use crate::{
     cc,
     jit_alloc::{JitAlloc, JitAllocError},
     traits::{Any, FnMutThunk, FnOnceThunk, FnPtr, FnThunk, ToBoxedUnsize},
+    Box,
 };
 
 /// Declares a wrapper type around a higher-ranked bare function which can be used with [BareFn] and
