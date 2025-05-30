@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.3.0] - 2025-05-30
+
+### Added
+- `tuple_trait` feature to add a `core::marker::Tuple` bound to `FnPtr::Args`, allowing better
+  interoperability with other Nightly features such as `fn_traits` and `unboxed_closures`.
+
+### Changed
+- use `dep:crate` optional dependency toggles to prevent implicit dependency named features.
+  This is technically a breaking change, but as these features are not documented I have decided
+  to not bump the major version.
+
 ## [v2.2.0] - 2025-05-30
 
 ### Fixed
