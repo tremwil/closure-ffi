@@ -48,7 +48,7 @@ version = "2.1.0"
 dependencies = [
  "clear-cache",
  "closure-ffi-proc-macros",
- "jit-allocator",
+ "jit-allocator2",
  "libc",
  "region",
  "spin",
@@ -83,10 +83,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "jit-allocator"
-version = "0.2.8"
+name = "jit-allocator2"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e28cf4ebc39fb6f738ec0d837aa6ad34d5ce3902c275b298fad2d0e9f857fff0"
+checksum = "d47f4f79cbe2ba240bc3d4e9873eb5d78797c6baa983fc5caca222c04b0fee2e"
 dependencies = [
  "cfgenius",
  "errno",

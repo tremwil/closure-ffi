@@ -10,7 +10,7 @@ scenarios, e.g. function hooking for game modding/hacking.
 The crate comes with the following feature flags:
 - `no_std`: Makes the crate compatible with `#![no_std]`. A dependency on `alloc` and `spin` is
   still required.
-- `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator`](https://crates.io/crates/jit-allocator)
+- `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator2`](https://crates.io/crates/jit-allocator2)
   crate. This is enabled by default.
 - `custom_jit_alloc`: Allows providing a global JIT allocator through the `global_jit_alloc!` macro.
   **This is incompatible with `bundled_jit_alloc`**.
