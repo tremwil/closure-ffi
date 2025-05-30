@@ -26,16 +26,16 @@ jobs:
           - --no-default-features -F custom_jit_alloc,no_std
           - -F full
           - -F full,no_std
-          - -F full,unstable
+          - -F full,tuple_trait
         include:
           - cargo: cargo
-          - features: -F full,unstable
+          - features: -F full,tuple_trait
             cargo: cargo +nightly
 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ${{ matrix.cargo }} check --workspace ${{ matrix.features }}
+      - run: ${{ matrix.cargo }} check --workspace --all-targets ${{ matrix.features }}
 
   doc:
     name: cargo doc
