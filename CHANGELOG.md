@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.0] - 2025-05-30
+
+### Fixed
+- `bundled_jit_alloc` should now work on `i686-pc-windows-msvc` without linker errors
+
+### Changed
+- Bundled JIT allocator now uses [`jit-allocator2`](https://crates.io/crates/jit-allocator2), a 
+  maintained fork of [`jit-allocator`](https://crates.io/crates/jit-allocator2) which fixes 
+  a linker issue on `i686-pc-windows-msvc`.
+
 ## [v2.1.0] - 2025-05-29
 
 ### Added
