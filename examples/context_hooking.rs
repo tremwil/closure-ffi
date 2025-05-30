@@ -25,6 +25,12 @@ pub struct HookCtx<'a, B: FnPtr> {
 // creating our own closure type that can be called like the `FnPtr`.
 #[cfg(feature = "tuple_trait")]
 mod unstable {
+    use core::marker::PhantomData;
+
+    use closure_ffi::traits::FnPtr;
+
+    use super::HookCtx;
+
     struct FnPtrCall<'x, 'y, 'z, B: FnPtr>(B, PhantomData<(&'x mut (), &'y mut (), &'z mut ())>);
 
     impl<'x, 'y, 'z, B: FnPtr> FnOnce<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
@@ -233,9 +239,11 @@ fn test_inference() {
     // Infer `B` from `CC` and `F` with used context
     let _hook = Hook::with_cc_ctx(cc::C, |ctx| {
         move |x: usize, y: u32| -> usize {
+            // stable API. Must pass the args as a tuple
             #[cfg(not(feature = "tuple_trait"))]
             let result = unsafe { ctx.original()((x, y)) };
 
+            // nightly-only API with tuple_trait feature: call like a normal function
             #[cfg(feature = "tuple_trait")]
             let result = unsafe { ctx.original()(x, y) };
 
