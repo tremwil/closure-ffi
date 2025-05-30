@@ -124,7 +124,7 @@ impl<J: JitAlloc, R: spin::RelaxStrategy> JitAlloc for spin::lazy::Lazy<J, fn() 
 /// The default, global JIT allocator.
 ///
 /// When the `bundled_jit_alloc` feature is enabled, this is currently implemented as a ZST
-/// deffering to a static [`jit_allocator::JitAllocator`] behind a [`std::sync::Mutex`] (or a
+/// deffering to a static [`jit_allocator2::JitAllocator`] behind a [`std::sync::Mutex`] (or a
 /// [`spin::Mutex`](https://docs.rs/spin/0.9/spin/type.Mutex.html) under `no_std`).
 ///
 /// When the `custom_jit_alloc` feature is enabled, defers to a [`JitAlloc`] implementation
@@ -134,15 +134,15 @@ pub struct GlobalJitAlloc;
 
 #[cfg(feature = "bundled_jit_alloc")]
 mod bundled_jit_alloc {
-    use jit_allocator::JitAllocator;
+    use jit_allocator2::JitAllocator;
 
     use super::*;
 
     #[inline(always)]
-    fn convert_access(access: ProtectJitAccess) -> jit_allocator::ProtectJitAccess {
+    fn convert_access(access: ProtectJitAccess) -> jit_allocator2::ProtectJitAccess {
         match access {
-            ProtectJitAccess::ReadExecute => jit_allocator::ProtectJitAccess::ReadExecute,
-            ProtectJitAccess::ReadWrite => jit_allocator::ProtectJitAccess::ReadWrite,
+            ProtectJitAccess::ReadExecute => jit_allocator2::ProtectJitAccess::ReadExecute,
+            ProtectJitAccess::ReadWrite => jit_allocator2::ProtectJitAccess::ReadWrite,
         }
     }
 
@@ -159,7 +159,7 @@ mod bundled_jit_alloc {
             return;
         }
         #[allow(unreachable_code)]
-        jit_allocator::flush_instruction_cache(rx_ptr, size);
+        jit_allocator2::flush_instruction_cache(rx_ptr, size);
     }
 
     impl JitAlloc for core::cell::RefCell<JitAllocator> {
@@ -183,7 +183,7 @@ mod bundled_jit_alloc {
             _size: usize,
             access: ProtectJitAccess,
         ) {
-            jit_allocator::protect_jit_memory(convert_access(access));
+            jit_allocator2::protect_jit_memory(convert_access(access));
         }
     }
 
@@ -209,7 +209,7 @@ mod bundled_jit_alloc {
             _size: usize,
             access: ProtectJitAccess,
         ) {
-            jit_allocator::protect_jit_memory(convert_access(access));
+            jit_allocator2::protect_jit_memory(convert_access(access));
         }
     }
 
@@ -235,7 +235,7 @@ mod bundled_jit_alloc {
             _size: usize,
             access: ProtectJitAccess,
         ) {
-            jit_allocator::protect_jit_memory(convert_access(access));
+            jit_allocator2::protect_jit_memory(convert_access(access));
         }
     }
 
@@ -279,7 +279,7 @@ mod bundled_jit_alloc {
             _size: usize,
             access: ProtectJitAccess,
         ) {
-            jit_allocator::protect_jit_memory(convert_access(access));
+            jit_allocator2::protect_jit_memory(convert_access(access));
         }
     }
 
@@ -287,7 +287,7 @@ mod bundled_jit_alloc {
     pub(super) mod thread_jit_alloc {
         use core::{cell::UnsafeCell, marker::PhantomData};
 
-        use jit_allocator::JitAllocator;
+        use jit_allocator2::JitAllocator;
 
         #[allow(unused_imports)]
         use super::*;
@@ -328,7 +328,7 @@ mod bundled_jit_alloc {
                 _size: usize,
                 access: ProtectJitAccess,
             ) {
-                jit_allocator::protect_jit_memory(convert_access(access));
+                jit_allocator2::protect_jit_memory(convert_access(access));
             }
         }
     }

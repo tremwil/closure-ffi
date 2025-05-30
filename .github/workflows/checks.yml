@@ -51,40 +51,30 @@ jobs:
         profile:
           - dev
           - release
-        runner:
-          - ubuntu-latest # x86_64-unknown-linux-gnu
-          - windows-latest # x86_64-pc-windows-msvc
-          - macos-latest # aarch64-apple-darwin
-          - ubuntu-24.04-arm # aarch64-unknown-linux-gnu
-          - macos-13 # x86_64-apple-darwin
+        target:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - runner: macos-13
+            target: x86_64-apple-darwin
+          - runner: windows-latest
+            target: i686-pc-windows-msvc
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: macos-latest
+            target: aarch64-apple-darwin
     
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.target.runner }}
     steps:
       - uses: actions/checkout@v4
+      - run: rustup target add ${{ matrix.target.target }}
       - name: Full feature set build and test
-        run: cargo test --profile ${{ matrix.profile }} -F full
+        run: cargo test --target ${{ matrix.target.target }} --profile ${{ matrix.profile }} -F full
       - run: cargo clean
       - name: Custom JIT alloc build and test
-        run: cargo test --profile ${{ matrix.profile }} --no-default-features -F custom_jit_alloc
-
-  build_and_test_i686_windows:
-    strategy:
-      fail-fast: false
-      matrix:
-        profile:
-          - dev
-          - release
-    runs-on: windows-latest
-
-    needs: [fmt, check]
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup target add i686-pc-windows-msvc
-      # At the moment, bundled_jit_alloc is not supported on i686 windows due to a linker error
-      # in jit-allocator
-      - run: cargo build --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
-      - run: cargo test --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
+        run: cargo test --target ${{ matrix.target.target }} --profile ${{ matrix.profile }} --no-default-features -F custom_jit_alloc
   
   all_checks_pass:
     needs:
@@ -92,7 +82,6 @@ jobs:
       - check
       - doc
       - build_and_test
-      - build_and_test_i686_windows
     runs-on: ubuntu-latest
     steps:
     - name: Decide whether the needed jobs succeeded or failed
