@@ -81,10 +81,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup target add i686-pc-windows-msvc
-      # At the moment, bundled_jit_alloc is not supported on i686 windows due to a linker error
-      # in jit-allocator
-      - run: cargo build --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
-      - run: cargo test --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features
+      - name: Full feature set build and test
+        run: cargo test --target i686-pc-windows-msvc --profile ${{ matrix.profile }} -F full
+      - run: cargo clean
+      - name: Custom JIT alloc build and test
+        run: cargo test --target i686-pc-windows-msvc --profile ${{ matrix.profile }} --no-default-features -F custom_jit_alloc
   
   all_checks_pass:
     needs:
