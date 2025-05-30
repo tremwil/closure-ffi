@@ -27,11 +27,12 @@ test = true
 
 [features]
 default = [ "bundled_jit_alloc" ]
-no_std = [ "spin" ]
-bundled_jit_alloc = [ "jit-allocator2" ]
+no_std = [ "dep:spin" ]
+bundled_jit_alloc = [ "dep:jit-allocator2" ]
 custom_jit_alloc = []
 unstable = []
-proc_macros = [ "closure-ffi-proc-macros" ]
+tuple_trait = [ "unstable" ]
+proc_macros = [ "dep:closure-ffi-proc-macros" ]
 full = [ "bundled_jit_alloc", "proc_macros" ]
 
 [dependencies]

@@ -3,6 +3,9 @@
 
 // This example will not compile without the bundled JIT allocator.
 #![cfg(feature = "bundled_jit_alloc")]
+#![cfg_attr(feature = "tuple_trait", feature(unboxed_closures))]
+#![cfg_attr(feature = "tuple_trait", feature(tuple_trait))]
+#![cfg_attr(feature = "tuple_trait", feature(fn_traits))]
 
 use core::marker::PhantomData;
 
@@ -18,13 +21,79 @@ pub struct HookCtx<'a, B: FnPtr> {
     phantom: PhantomData<&'a ()>,
 }
 
+// When the `tuple_trait` unstable feature is enabled, we can create a nicer wrapping API by
+// creating our own closure type that can be called like the `FnPtr`.
+#[cfg(feature = "tuple_trait")]
+mod unstable {
+    struct FnPtrCall<'x, 'y, 'z, B: FnPtr>(B, PhantomData<(&'x mut (), &'y mut (), &'z mut ())>);
+
+    impl<'x, 'y, 'z, B: FnPtr> FnOnce<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
+    where
+        B: 'x + 'y + 'z,
+    {
+        type Output = B::Ret<'x, 'y, 'z>;
+
+        extern "rust-call" fn call_once(self, args: B::Args<'x, 'y, 'z>) -> Self::Output {
+            unsafe { self.0.call(args) }
+        }
+    }
+    impl<'x, 'y, 'z, B: FnPtr> FnMut<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
+    where
+        B: 'x + 'y + 'z,
+    {
+        extern "rust-call" fn call_mut(&mut self, args: B::Args<'x, 'y, 'z>) -> Self::Output {
+            unsafe { self.0.call(args) }
+        }
+    }
+    impl<'x, 'y, 'z, B: FnPtr> Fn<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
+    where
+        B: 'x + 'y + 'z,
+    {
+        extern "rust-call" fn call(&self, args: B::Args<'x, 'y, 'z>) -> Self::Output {
+            unsafe { self.0.call(args) }
+        }
+    }
+
+    impl<'a, B: FnPtr> HookCtx<'a, B> {
+        /// Get an opaque closure type that invokes the original function.
+        ///
+        /// # Safety
+        /// The original function is `unsafe`, yet the value returned by this method allows invoking
+        /// it inside a safe context. By calling this, you assert that all invocations of
+        /// the return value will satisfy the safety invariants of the wrapped function.
+        pub unsafe fn original<'x, 'y, 'z>(
+            &self,
+        ) -> impl Fn<B::Args<'x, 'y, 'z>, Output = B::Ret<'x, 'y, 'z>>
+        where
+            Self: 'x + 'y + 'z,
+        {
+            FnPtrCall(self.original, PhantomData)
+        }
+    }
+}
+
 impl<'a, B: FnPtr> HookCtx<'a, B> {
-    /// Calls the original function.
+    /// Calls the original function (stable).
     pub unsafe fn call_original<'x, 'y, 'z>(&self, args: B::Args<'x, 'y, 'z>) -> B::Ret<'x, 'y, 'z>
     where
         Self: 'x + 'y + 'z,
     {
         unsafe { self.original.call(args) }
+    }
+
+    /// Get an opaque closure type that invokes the original function.
+    ///
+    /// # Safety
+    /// The original function is `unsafe`, yet the value returned by this method allows invoking
+    /// it inside a safe context. By calling this, you assert that all invocations of
+    /// the return value will satisfy the safety invariants of the wrapped function.
+    #[cfg(not(feature = "tuple_trait"))]
+    pub unsafe fn original<'x, 'y, 'z>(&self) -> impl Fn(B::Args<'x, 'y, 'z>) -> B::Ret<'x, 'y, 'z>
+    where
+        Self: 'x + 'y + 'z,
+    {
+        let bare = self.original;
+        move |args| unsafe { bare.call(args) }
     }
 }
 
@@ -87,7 +156,7 @@ impl<'a, B: FnPtr> Hook<'a, B> {
 
     /// Create a hook that will invoke a closure when the original function is called.
     ///
-    /// Unlike [`Hook::new`], takes closure-generating function that is given a hook context
+    /// Unlike [`Hook::new`], takes a closure-generating function that is given a hook context
     /// object to capture.
     pub fn with_ctx<F>(ctx_binder: impl FnOnce(HookCtx<'a, B>) -> F) -> Self
     where
@@ -106,7 +175,7 @@ impl<'a, B: FnPtr> Hook<'a, B> {
     /// The signature of the hooked function is inferred from the calling convention marker type and
     /// the closure's annotations.
     ///
-    /// Unlike [`Hook::new`], takes closure-generating function that is given a hook context
+    /// Unlike [`Hook::new`], takes a closure-generating function that is given a hook context
     /// object to capture.
     pub fn with_cc_ctx<CC, F>(cc: CC, ctx_binder: impl FnOnce(HookCtx<'a, B>) -> F) -> Self
     where
@@ -164,7 +233,12 @@ fn test_inference() {
     // Infer `B` from `CC` and `F` with used context
     let _hook = Hook::with_cc_ctx(cc::C, |ctx| {
         move |x: usize, y: u32| -> usize {
-            let result = unsafe { ctx.call_original((x, y)) };
+            #[cfg(not(feature = "tuple_trait"))]
+            let result = unsafe { ctx.original()((x, y)) };
+
+            #[cfg(feature = "tuple_trait")]
+            let result = unsafe { ctx.original()(x, y) };
+
             result + 42
         }
     });

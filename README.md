@@ -19,7 +19,11 @@ The crate comes with the following feature flags:
   statements), as well as the `bare_dyn` proc macro for writing `BareFn*` types of boxed 
   closures (i.e. `Box<dyn Fn()>`) more concisely. 
 - `unstable`: Enable the use of unstable Rust features for aspects of the crate that benefit from 
-  them.
+  them without causing any API breaks. Unstable features that can cause breaking changes when enabled 
+  are gated separately.
+- `tuple_trait`: Adds a [`core::marker::Tuple`](https://doc.rust-lang.org/nightly/core/marker/trait.Tuple.html)
+  bound on `FnPtr::Args`. This allows downstream crates to easily integrate the library with closure-related
+  nightly features such as `unboxed_closures` and `fn_traits`. Also enables the `unstable` feature. 
 - `full`: Enables `bundled_jit_alloc` and `proc_macros` features.
 
 # Examples
