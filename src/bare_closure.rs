@@ -370,6 +370,14 @@ macro_rules! bare_closure_impl {
                 all(windows, target_arch = "x86_64")
             );
 
+            cc_shorthand_in!(
+                new_variadic_in,
+                $trait_ident,
+                cc::Variadic,
+                "`C` variadic",
+                feature = "c_variadic"
+            );
+
             #[$bare_toggle]
             /// Return a bare function pointer that invokes the underlying closure.
             ///
@@ -512,6 +520,14 @@ macro_rules! bare_closure_impl {
                 cc::Win64,
                 "win64",
                 all(windows, target_arch = "x86_64")
+            );
+
+            cc_shorthand!(
+                new_variadic,
+                $trait_ident,
+                cc::Variadic,
+                "`C` variadic",
+                feature = "c_variadic"
             );
         }
 

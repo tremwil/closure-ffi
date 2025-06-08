@@ -272,5 +272,11 @@ macro_rules! cc_thunk_impl_triple_variadic {
     };
 }
 
+/// Marker type representing the `C` variadic calling convention.
+///
+/// This is a separate marker type to enable richer type inference.
+#[derive(Debug, Clone, Copy, Default)]
+#[cfg(any(doc, feature = "c_variadic"))]
+pub struct Variadic;
 #[cfg(feature = "c_variadic")]
-cc_trait_impl!(C, "C", cc_thunk_impl_triple_variadic);
+cc_trait_impl!(Variadic, "C", cc_thunk_impl_triple_variadic);
