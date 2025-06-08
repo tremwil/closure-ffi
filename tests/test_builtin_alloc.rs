@@ -5,8 +5,7 @@ use closure_ffi::{traits::FnPtr, BareFn, BareFnMut, BareFnOnce};
 
 #[test]
 fn test_infer_closure() {
-    let bare_closure: BareFn<'_, unsafe extern "C" fn(usize) -> u32>;
-    bare_closure = BareFn::new(|arg| arg as _);
+    let bare_closure: BareFn<'_, unsafe extern "C" fn(usize) -> u32> = BareFn::new(|arg| arg as _);
 
     assert_eq!(unsafe { bare_closure.bare().call((42,)) }, 42);
 }
@@ -100,7 +99,7 @@ fn test_moved_fn_mut() {
 #[test]
 fn test_print_fn() {
     let bare_closure = BareFn::new_c(move |n: usize| {
-        println!("{:08x}", n);
+        println!("{n:08x}");
         3 * n
     });
 
@@ -114,7 +113,7 @@ fn test_print_fn() {
 #[test]
 fn test_print_fn_once() {
     let bare_closure = BareFnOnce::new_c(move |n: usize| {
-        println!("{:08x}", n);
+        println!("{n:08x}");
         3 * n
     });
 

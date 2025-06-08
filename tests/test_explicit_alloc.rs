@@ -23,7 +23,7 @@ fn test_borrow_fn() {
     let array = [0, 5, 10, 15, 20];
     let bare_closure = BareFn::new_c_in(
         |n: usize| {
-            println!("{:08x}", n);
+            println!("{n:08x}");
             array[n]
         },
         &SLAB,
@@ -75,7 +75,7 @@ fn test_moved_fn_mut() {
 fn test_print_fn() {
     let bare_closure = BareFn::new_c_in(
         move |n: usize| {
-            println!("{:08x}", n);
+            println!("{n:08x}");
             3 * n
         },
         &SLAB,
@@ -92,7 +92,7 @@ fn test_print_fn() {
 fn test_print_fn_once() {
     let bare_closure = BareFnOnce::new_c_in(
         move |n: usize| {
-            println!("{:08x}", n);
+            println!("{n:08x}");
             3 * n
         },
         &SLAB,

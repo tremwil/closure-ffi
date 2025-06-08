@@ -80,6 +80,9 @@ mod unstable {
 
 impl<'a, B: FnPtr> HookCtx<'a, B> {
     /// Calls the original function (stable).
+    ///
+    /// # Safety
+    /// Shares the same safety requirements as the detoured function.
     pub unsafe fn call_original<'x, 'y, 'z>(&self, args: B::Args<'x, 'y, 'z>) -> B::Ret<'x, 'y, 'z>
     where
         Self: 'x + 'y + 'z,
@@ -209,8 +212,8 @@ fn test_inference() {
     let borrowed = Box::new(42usize);
 
     // Infer `F` from `B`
-    let hook: Hook<unsafe extern "C" fn(usize) -> usize>;
-    hook = Hook::new(|arg| arg + *borrowed);
+
+    let hook: Hook<unsafe extern "C" fn(usize) -> usize> = Hook::new(|arg| arg + *borrowed);
     assert_eq!(unsafe { hook.hook()(4) }, 46);
 
     // Infer `B` from `CC` and `F`
@@ -219,8 +222,8 @@ fn test_inference() {
     assert_eq!(unsafe { hook.hook()(2) }, 84);
 
     // Infer 'F` from `B` with unused context
-    let hook: Hook<unsafe extern "C" fn(usize) -> u32>;
-    hook = Hook::with_ctx(|_ctx| move |arg| arg as _);
+
+    let hook: Hook<unsafe extern "C" fn(usize) -> u32> = Hook::with_ctx(|_ctx| move |arg| arg as _);
     assert_eq!(unsafe { hook.hook()(42) }, 42);
 
     // Infer `B` from `CC` and `F` with unused context
@@ -228,8 +231,8 @@ fn test_inference() {
     assert_eq!(unsafe { hook.hook()("abc".to_string()) }, 3);
 
     // Infer `F` from `B` with used context
-    let _hook: Hook<unsafe extern "C" fn(usize, u32) -> u32>;
-    _hook = Hook::with_ctx(|ctx| {
+
+    let _hook: Hook<unsafe extern "C" fn(usize, u32) -> u32> = Hook::with_ctx(|ctx| {
         move |x, y| unsafe {
             let result = ctx.call_original((x, y));
             result + 42
