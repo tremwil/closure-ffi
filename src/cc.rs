@@ -193,7 +193,7 @@ cc_impl!(
 ///
 /// Because one cannot forward arguments from one to another C variadic function, this is a
 /// zero-variant enum in order to make [`FnPtr::call`](crate::traits::FnPtr) impossible to call.
-#[cfg(feature = "c_variadic")]
+#[cfg(any(doc, feature = "c_variadic"))]
 pub enum VarArgs {}
 
 #[cfg(feature = "c_variadic")]
