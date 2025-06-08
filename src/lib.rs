@@ -3,6 +3,7 @@
 #![cfg_attr(feature = "no_std", no_std)]
 #![cfg_attr(feature = "unstable", feature(unsize))]
 #![cfg_attr(feature = "tuple_trait", feature(tuple_trait))]
+#![cfg_attr(feature = "c_variadic", feature(c_variadic))]
 #![doc = include_str!("../README.md")]
 
 #[cfg(all(
