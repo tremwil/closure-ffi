@@ -16,7 +16,7 @@ jobs:
       - run: cargo +nightly fmt --check
 
   check:
-    name: cargo check
+    name: cargo clippy
     strategy:
       fail-fast: false
       matrix:
@@ -26,16 +26,16 @@ jobs:
           - --no-default-features -F custom_jit_alloc,no_std
           - -F full
           - -F full,no_std
-          - -F full,tuple_trait
+          - -F full,tuple_trait,c_variadic
         include:
           - cargo: cargo
-          - features: -F full,tuple_trait
+          - features: -F full,tuple_trait,c_variadic
             cargo: cargo +nightly
 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ${{ matrix.cargo }} check --workspace --all-targets ${{ matrix.features }}
+      - run: ${{ matrix.cargo }} clippy --workspace --all-targets ${{ matrix.features }}
 
   doc:
     name: cargo doc
