@@ -30,10 +30,11 @@ jobs:
         include:
           - setup: ""
           - features: -F full,tuple_trait,c_variadic
-            setup: >
+            setup: |
               rustup toolchain install nightly
               rustup default nightly
               rustup component add --toolchain nightly clippy
+
 
     runs-on: ubuntu-latest
     steps:
