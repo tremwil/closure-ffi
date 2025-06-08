@@ -28,14 +28,18 @@ jobs:
           - -F full,no_std
           - -F full,tuple_trait,c_variadic
         include:
-          - cargo: cargo
+          - setup: ""
           - features: -F full,tuple_trait,c_variadic
-            cargo: cargo +nightly
+            setup: >
+              rustup toolchain install nightly
+              rustup default nightly
+              rustup component add --toolchain nightly clippy
 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ${{ matrix.cargo }} clippy --workspace --all-targets ${{ matrix.features }}
+      - run: ${{ matrix.setup }}
+      - run: cargo clippy --workspace --all-targets ${{ matrix.features }}
 
   doc:
     name: cargo doc
