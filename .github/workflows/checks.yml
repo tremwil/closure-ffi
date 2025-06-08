@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ${{ matrix.setup }}
-      - run: cargo clippy --workspace --all-targets ${{ matrix.features }}
+      - run: RUSTFLAGS="-Dwarnings" cargo clippy --workspace --all-targets ${{ matrix.features }}
 
   doc:
     name: cargo doc
