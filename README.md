@@ -24,6 +24,7 @@ The crate comes with the following feature flags:
 - `tuple_trait`: Adds a [`core::marker::Tuple`](https://doc.rust-lang.org/nightly/core/marker/trait.Tuple.html)
   bound on `FnPtr::Args`. This allows downstream crates to easily integrate the library with closure-related
   nightly features such as `unboxed_closures` and `fn_traits`. Also enables the `unstable` feature. 
+- `c_variadic`: Adds *partial* (no invocation through `call`) `FnPtr` and `Fn*Thunk` implementations for variadic functions.
 - `full`: Enables `bundled_jit_alloc` and `proc_macros` features.
 
 # Examples
