@@ -27,7 +27,7 @@ fn test_variadic() {
         vsprintf(buf.as_mut_ptr(), fmt.as_ptr(), va.as_va_list());
     });
 
-    unsafe { bare_fn.bare()(42, 0xDEADBEEF123u64, '?', 3.1415) }
+    unsafe { bare_fn.bare()(42, 0xDEADBEEF123u64, '?', core::f64::consts::PI) }
     drop(bare_fn);
 
     let formatted = CStr::from_bytes_until_nul(&buf).unwrap().to_string_lossy();

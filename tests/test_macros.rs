@@ -41,7 +41,7 @@ bare_hrtb! {
 
 #[test]
 fn test_non_static_hrtb() {
-    const STATIC_STR: &'static str = "xyz";
+    const STATIC_STR: &str = "xyz";
     let owned_str1 = MyStr("foo");
     let owned_str2 = MyStr("bar");
 
