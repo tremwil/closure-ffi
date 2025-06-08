@@ -32,7 +32,7 @@ impl syn::parse::Parse for MacroInput {
                 struct HasImplicitBoundLt(Vec<pm2::Span>);
                 impl<'a> Visit<'a> for HasImplicitBoundLt {
                     fn visit_lifetime(&mut self, i: &'a syn::Lifetime) {
-                        if i.ident.to_string() == "_" {
+                        if i.ident == "_" {
                             self.0.push(i.span());
                         }
                     }
@@ -69,9 +69,9 @@ impl syn::parse::Parse for MacroInput {
             }
             other => Err(syn::Error::new_spanned(
                 other,
-                &format!(
+                format!(
                     "Expected bare function type, got {}",
-                    other.to_token_stream().to_string()
+                    other.to_token_stream()
                 ),
             )),
         }
@@ -280,10 +280,8 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
     });
 
     let alias_ident_lit = syn::LitStr::new(&alias_ident.to_string(), pm2::Span::call_site());
-    let alias_ident_doc_lit = syn::LitStr::new(
-        &format!("[`{}`].", alias_ident.to_string()),
-        pm2::Span::call_site(),
-    );
+    let alias_ident_doc_lit =
+        syn::LitStr::new(&format!("[`{alias_ident}`]."), pm2::Span::call_site());
 
     let mut punc_impl_lifetimes =
         bare_fn.lifetimes.as_ref().map(|lt| lt.lifetimes.clone()).unwrap_or_default();
@@ -301,7 +299,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             paren_token: syn::token::Paren(pm2::Span::call_site()),
             elems: syn::punctuated::Punctuated::new(),
         }),
-        syn::ReturnType::Type(_, ty) => &*ty,
+        syn::ReturnType::Type(_, ty) => ty,
     };
     let arg_indices = (0..bare_fn.inputs.len() as u32).map(|index| {
         syn::Member::Unnamed(syn::Index {
