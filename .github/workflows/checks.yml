@@ -50,6 +50,7 @@ jobs:
       - run: RUSTFLAGS="--cfg docsrs" cargo +nightly doc -F full
 
   build_and_test:
+    name: Build and test
     strategy:
       fail-fast: false
       matrix:
@@ -74,17 +75,17 @@ jobs:
           - dev
           - release
         include:
-          - cargo: cargo
+          - nightly: ''
           - features: "-F tuple_trait,c_variadic"
-            cargo: cargo +nightly
+            nightly: +nightly
     
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
     runs-on: ${{ matrix.target.runner }}
     steps:
       - uses: actions/checkout@v4
       - run: |
-          rustup target add ${{ matrix.target.target }}
-          ${{ matrix.cargo }} test --target ${{ matrix.target.target }} --profile ${{ matrix.profile }} 
+          rustup ${{ matrix.nightly }} target add ${{ matrix.target.target }}
+          cargo ${{ matrix.nightly }} test --target ${{ matrix.target.target }} --profile ${{ matrix.profile }} 
   
   all_checks_pass:
     needs:
