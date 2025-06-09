@@ -2,7 +2,7 @@
 
 mod slab_alloc;
 
-use closure_ffi::{global_jit_alloc, BareFn, BareFnMut, BareFnOnce};
+use closure_ffi::{global_jit_alloc, BareFn, BareFnMut};
 use slab_alloc::SlabAlloc;
 
 #[cfg(not(feature = "no_std"))]
@@ -81,6 +81,8 @@ fn test_print_fn() {
 #[cfg(not(feature = "no_std"))]
 #[test]
 fn test_print_fn_once() {
+    use closure_ffi::BareFnOnce;
+
     let bare_closure = BareFnOnce::new_c(move |n: usize| {
         println!("{:08x}", n);
         3 * n
