@@ -81,7 +81,7 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
     /// Calling convention of the bare function, as a ZST marker type.
     type CC: Default;
 
-    #[cfg(feature = "tuple_trait")]
+    #[cfg(all(not(doc), feature = "tuple_trait"))]
     /// The arguments of the function, as a tuple.
     ///
     /// This is a GAT with 3 independent lifetimes to support most higher-kinded bare functions.
@@ -89,10 +89,15 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
     where
         Self: 'a + 'b + 'c;
 
-    #[cfg(not(feature = "tuple_trait"))]
+    #[cfg(any(doc, not(feature = "tuple_trait")))]
+    #[cfg_attr(docsrs, doc(cfg(all())))]
     /// The arguments of the function, as a tuple.
     ///
     /// This is a GAT with 3 independent lifetimes to support most higher-kinded bare functions.
+    ///
+    /// When the `tuple_trait` crate feature is enabled, this associated type has a
+    /// [`core::marker::Tuple`] bound. Note that this also requires the `tuple_trait` nightly
+    /// feature.
     type Args<'a, 'b, 'c>
     where
         Self: 'a + 'b + 'c;
