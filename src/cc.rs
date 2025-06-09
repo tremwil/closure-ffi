@@ -2,6 +2,7 @@
 
 macro_rules! cc_thunk_impl_triple {
     ($cconv:ty, $cconv_lit:literal, ($($id_tys: ident,)*), ($($tuple_idx: tt,)*), ($($args:ident: $tys:ty,)*)) => {
+        #[doc(hidden)]
         unsafe impl<R, $($id_tys),*> $crate::traits::FnPtr for unsafe extern $cconv_lit fn($($tys,)*) -> R {
             type CC = $cconv;
             type Args<'a, 'b, 'c> = ($($tys,)*) where Self: 'a + 'b + 'c;
@@ -26,6 +27,7 @@ macro_rules! cc_thunk_impl_triple {
             }
         }
 
+        #[doc(hidden)]
         unsafe impl<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>
             $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
@@ -38,6 +40,8 @@ macro_rules! cc_thunk_impl_triple {
                 thunk::<F, R, $($tys),*> as *const u8
             };
         }
+
+        #[doc(hidden)]
         unsafe impl<F: FnMut($($tys),*) -> R, R, $($id_tys),*>
             $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
@@ -50,6 +54,8 @@ macro_rules! cc_thunk_impl_triple {
                 thunk::<F, R, $($tys),*> as *const u8
             };
         }
+
+        #[doc(hidden)]
         unsafe impl<F: Fn($($tys),*) -> R, R, $($id_tys),*>
             $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
@@ -199,6 +205,7 @@ pub enum VarArgs {}
 #[cfg(feature = "c_variadic")]
 macro_rules! cc_thunk_impl_triple_variadic {
     ($cconv:ty, $cconv_lit:literal, ($($id_tys: ident,)*), ($($tuple_idx: tt,)*), ($($args:ident: $tys:ty,)*)) => {
+        #[doc(hidden)]
         unsafe impl<R, $($id_tys),*> $crate::traits::FnPtr for unsafe extern $cconv_lit fn($($tys,)* ...) -> R {
             type CC = $cconv;
             type Args<'a, 'b, 'c> = ($($tys,)* VarArgs,) where Self: 'a + 'b + 'c;
@@ -224,6 +231,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
             }
         }
 
+        #[doc(hidden)]
         unsafe impl<F: for<'va> FnOnce($($tys,)* core::ffi::VaListImpl<'va>) -> R, R, $($id_tys),*>
             $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
@@ -239,6 +247,8 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 thunk::<F, R, $($tys),*> as *const u8
             };
         }
+
+        #[doc(hidden)]
         unsafe impl<F: for<'va> FnMut($($tys,)* core::ffi::VaListImpl<'va>) -> R, R, $($id_tys),*>
             $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
@@ -254,6 +264,8 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 thunk::<F, R, $($tys),*> as *const u8
             };
         }
+
+        #[doc(hidden)]
         unsafe impl<F: for<'va> Fn($($tys,)* core::ffi::VaListImpl<'va>) -> R, R, $($id_tys),*>
             $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
@@ -272,7 +284,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
     };
 }
 
-/// Marker type representing the `C` variadic calling convention.
+/// Marker type representing the C variadic calling convention.
 ///
 /// This is a separate marker type to enable richer type inference.
 #[derive(Debug, Clone, Copy, Default)]
