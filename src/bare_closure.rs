@@ -395,9 +395,7 @@ macro_rules! bare_closure_impl {
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
         #[allow(dead_code)]
         pub struct $ty_name<B: FnPtr, S: ?Sized, A: JitAlloc> {
-            thunk_info: ThunkInfo,
-            jit_alloc: A,
-            storage: *mut S,
+            untyped: $erased_ty_name<S, A>,
             phantom: PhantomData<B>,
         }
 
