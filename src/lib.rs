@@ -38,8 +38,8 @@ pub mod traits;
 pub mod prelude {
     #[doc(inline)]
     pub use super::bare_closure::{
-        BareFn, BareFnAny, BareFnMut, BareFnMutAny, BareFnMutSend, BareFnOnce, BareFnOnceAny,
-        BareFnOnceSend, BareFnSend,
+        BareFn, BareFnAny, BareFnMut, BareFnMutAny, BareFnMutSync, BareFnOnce, BareFnOnceAny,
+        BareFnOnceSync, BareFnSync,
     };
     #[doc(inline)]
     pub use super::cc;
