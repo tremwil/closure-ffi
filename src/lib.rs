@@ -39,7 +39,7 @@ pub mod prelude {
     #[doc(inline)]
     pub use super::bare_closure::{
         BareFn, BareFnAny, BareFnMut, BareFnMutAny, BareFnMutSync, BareFnOnce, BareFnOnceAny,
-        BareFnOnceSync, BareFnSync,
+        BareFnOnceSync, BareFnSync, UntypedBareFn, UntypedBareFnMut, UntypedBareFnOnce,
     };
     #[doc(inline)]
     pub use super::cc;
