@@ -318,6 +318,12 @@ macro_rules! bare_closure_impl {
             }
         }
 
+        impl<B: FnPtr, S: ?Sized, A: JitAlloc> From<$ty_name<B, S, A>> for $erased_ty_name<S, A> {
+            fn from(value: $ty_name<B, S, A>) -> Self {
+                value.into_untyped()
+            }
+        }
+
         impl<S: ?Sized, A: JitAlloc> Drop for $erased_ty_name<S, A> {
             fn drop(&mut self) {
                 // Don't panic on allocator failures for safety reasons
