@@ -227,7 +227,7 @@ macro_rules! bare_closure_impl {
         ///
         /// This type cannot be directly constructed; it must be produced from a
         #[doc = $ty_name_doc]
-        /// through the `untyped` method or the [`Into`] trait.
+        /// through the `into_untyped` method or the [`Into`] trait.
         ///
         /// # Type parameters
         /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
@@ -259,7 +259,7 @@ macro_rules! bare_closure_impl {
         ///
         /// This type cannot be directly constructed; it must be produced from a
         #[doc = $ty_name_doc]
-        /// through the `untyped` method or the [`Into`] trait.
+        /// through the `into_untyped` method or the [`Into`] trait.
         ///
         /// # Type parameters
         /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
