@@ -21,22 +21,24 @@
 //! ```compile_fail
 //! #[cfg(all(feature = "bundled_jit_alloc", not(feature = "no_std")))]
 //! {
-//!     use closure_ffi::{BareFn, Cell};
+//!     use closure_ffi::BareFn;
 //!     use std::{cell::Cell, thread};
 //!
 //!     let cell = Cell::new(0);
 //!
 //!     // WARNING: `wrapped` is Sync, but not the closure!
 //!     let wrapped = BareFn::new_c(move || -> u32 {
-//!         cell.set(cell.get() + 1)
+//!         let val = cell.get();
+//!         cell.set(val + 1);
+//!         val
 //!     });
 //!
 //!     // `wrapped` can be borrowed here at is it Sync. But by `bare()` documentation,
 //!     // calling the function is unsound as the closure is not Sync!
 //!     thread::scope(|s| {
 //!         s.spawn(|| unsafe { wrapped.bare()() });
-//!         s.spawn(|| unsafe { wrapped.bare()() }).join().unwrap()
-//!     })
+//!         s.spawn(|| unsafe { wrapped.bare()() });
+//!     });
 //! }
 //! ```
 //!
@@ -312,7 +314,7 @@ macro_rules! bare_closure_impl {
             where
                 Self: 'static,
             {
-                self.thunk_info.thunk
+                core::mem::ManuallyDrop::new(self).thunk_info.thunk
             }
         }
 
