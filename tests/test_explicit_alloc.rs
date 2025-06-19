@@ -1,7 +1,7 @@
 mod slab_alloc;
 
 #[allow(unused_imports)]
-use closure_ffi::{cc, BareFn, BareFnMut, BareFnOnce};
+use closure_ffi::{cc, BareFn, BareFnMut, BareFnOnce, UntypedBareFn};
 use slab_alloc::SlabAlloc;
 
 #[cfg(not(feature = "no_std"))]
@@ -165,4 +165,65 @@ fn test_unwind_fn() {
     // Panics, see if we unwind across the boundary
     let result = std::panic::catch_unwind(|| unsafe { bare(0) });
     assert!(result.is_err())
+}
+
+#[cfg(not(feature = "no_std"))]
+#[test]
+fn test_untyped_bare_fn() {
+    use core::cell::Cell;
+
+    // Use this type to verify that our closures were dropped
+    #[derive(Debug)]
+    struct SetOnDrop<'a>(&'a Cell<bool>);
+    impl Drop for SetOnDrop<'_> {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum IntOrStr {
+        Int(i32),
+        Str(&'static str),
+    }
+    let shared = Cell::new(IntOrStr::Int(0));
+    let shared_ref = &shared;
+
+    let mut bare_closures = Vec::default();
+
+    let int_closure_dropped = Cell::new(false);
+    let int_closure_check = SetOnDrop(&int_closure_dropped);
+    let int_closure = move |arg: i32| {
+        println!("{int_closure_check:?}"); // Move it into the closure
+        shared_ref.set(IntOrStr::Int(arg));
+    };
+
+    bare_closures.push(BareFn::new_c(int_closure).into_untyped());
+
+    let str_closure_dropped = Cell::new(false);
+    let str_closure_check = SetOnDrop(&str_closure_dropped);
+    let str_closure = move |arg: &'static str| {
+        println!("{str_closure_check:?}"); // Move it into the closure
+        shared_ref.set(IntOrStr::Str(arg));
+    };
+    bare_closures.push(BareFn::new_c(str_closure).into_untyped());
+
+    unsafe {
+        let takes_int: unsafe extern "C" fn(i32) = core::mem::transmute(bare_closures[0].bare());
+        let takes_str: unsafe extern "C" fn(&'static str) =
+            core::mem::transmute(bare_closures[1].bare());
+
+        takes_str("foo");
+        assert_eq!(shared.get(), IntOrStr::Str("foo"));
+
+        takes_int(42);
+        assert_eq!(shared.get(), IntOrStr::Int(42));
+
+        takes_str("bar");
+        assert_eq!(shared.get(), IntOrStr::Str("bar"));
+    }
+
+    drop(bare_closures);
+    assert!(int_closure_dropped.get());
+    assert!(str_closure_dropped.get());
 }
