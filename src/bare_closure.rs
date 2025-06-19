@@ -202,10 +202,10 @@ macro_rules! bare_closure_impl {
     (
         ty_name: $ty_name:ident,
         erased_ty_name: $erased_ty_name:ident,
-        non_send_alias: $non_send_alias:ident,
-        send_alias: $send_alias:ident,
+        non_sync_alias: $non_sync_alias:ident,
+        sync_alias: $sync_alias:ident,
         sync_bounds: ($($sync_bounds: path),*),
-        send_alias_bound: $send_alias_bound: ty,
+        sync_alias_bound: $sync_alias_bound: ty,
         trait_ident: $trait_ident:ident,
         thunk_template: $thunk_template:ident,
         bare_toggle: $bare_toggle:meta,
@@ -215,8 +215,8 @@ macro_rules! bare_closure_impl {
         with_cc_doc: $with_cc_doc:literal,
         with_cc_in_doc: $with_cc_in_doc:literal,
         try_with_cc_in_doc: $try_with_cc_in_doc:literal,
-        non_send_alias_doc: $non_send_alias_doc:literal,
-        send_alias_doc: $send_alias_doc:literal,
+        non_sync_alias_doc: $non_sync_alias_doc:literal,
+        sync_alias_doc: $sync_alias_doc:literal,
         safety_doc: $safety_doc:literal
     ) => {
         #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
@@ -353,10 +353,13 @@ macro_rules! bare_closure_impl {
         /// This is a generic implementation which allows customizing the closure's
         /// type erased storage, which allows enforcing trait bounds like `Send` and `Sync` when
         /// needed. However, this plays poorly with type inference. Consider using the
-        #[doc = $non_send_alias_doc]
+        #[doc = $non_sync_alias_doc]
         /// and
-        #[doc = $send_alias_doc]
-        /// type aliases for the common cases of `S = dyn Any + 'a` and `S = dyn Send + 'a`.
+        #[doc = $sync_alias_doc]
+        /// type aliases for the common cases of `S = dyn Any + 'a` (no thread safety constraints)
+        /// and
+        #[doc = $sync_alias_bound_doc]
+        /// (minimum required to safely store/call the closure from other threads.).
         ///
         /// # Type parameters
         /// - `B`: The bare function pointer to expose the closure as. For higher-kinded bare
@@ -705,7 +708,7 @@ macro_rules! bare_closure_impl {
         /// This is a type alias only. Additional details and methods are described on the
         #[doc = $ty_name_doc]
         /// type.
-        pub type $non_send_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, dyn Any + 'a, A>;
+        pub type $non_sync_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, dyn Any + 'a, A>;
 
         #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
         /// Wrapper around a
@@ -716,7 +719,7 @@ macro_rules! bare_closure_impl {
         /// This is a type alias only. Additional details and methods are described on the
         #[doc = $ty_name_doc]
         /// type.
-        pub type $non_send_alias<'a, B, A> = $ty_name<B, dyn Any + 'a, A>;
+        pub type $non_sync_alias<'a, B, A> = $ty_name<B, dyn Any + 'a, A>;
 
         #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
@@ -726,14 +729,14 @@ macro_rules! bare_closure_impl {
         /// additional arguments.
         ///
         /// Unlike
-        #[doc = $non_send_alias_doc]
+        #[doc = $non_sync_alias_doc]
         /// this type enforces the correct combination of [`Send`] and [`Sync`] on the
         /// closure so that it is safe to both store and call from other threads.
         ///
         /// This is a type alias only. Additional details and methods are described on the
         #[doc = $ty_name_doc]
         /// type.
-        pub type $send_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, $send_alias_bound, A>;
+        pub type $sync_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, $sync_alias_bound, A>;
 
         #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
         /// Wrapper around a
@@ -742,14 +745,14 @@ macro_rules! bare_closure_impl {
         /// additional arguments.
         ///
         /// Unlike
-        #[doc = $non_send_alias_doc]
+        #[doc = $non_sync_alias_doc]
         /// this type enforces the correct combination of [`Send`] and [`Sync`] on the
         /// closure so that it is safe to both store and call from other threads.
         ///
         /// This is a type alias only. Additional details and methods are described on the
         #[doc = $ty_name_doc]
         /// type.
-        pub type $send_alias<'a, B, A> = $ty_name<B, $send_alias_bound, A>;
+        pub type $sync_alias<'a, B, A> = $ty_name<B, $sync_alias_bound, A>;
     };
 }
 
@@ -764,10 +767,10 @@ macro_rules! bare_closure_impl {
 bare_closure_impl!(
     ty_name: BareFnOnceAny,
     erased_ty_name: UntypedBareFnOnce,
-    non_send_alias: BareFnOnce,
-    send_alias: BareFnOnceSend,
+    non_sync_alias: BareFnOnce,
+    sync_alias: BareFnOnceSync,
     sync_bounds: (Send), // FnOnce only needs to be Send
-    send_alias_bound: dyn Send + 'a,
+    sync_alias_bound: dyn Send + 'a,
     trait_ident: FnOnceThunk,
     thunk_template: THUNK_TEMPLATE_ONCE,
     bare_toggle: cfg(any()),
@@ -777,8 +780,8 @@ bare_closure_impl!(
     with_cc_doc: "[`with_cc`](BareFnOnceAny::with_cc)",
     with_cc_in_doc: "[`with_cc_in`](BareFnOnceAny::with_cc_in)",
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnOnceAny::try_with_cc_in)",
-    non_send_alias_doc: "[`BareFnOnce`]",
-    send_alias_doc: "[`BareFnOnceSend`]",
+    non_sync_alias_doc: "[`BareFnOnce`]",
+    sync_alias_doc: "[`BareFnOnceSend`]",
     safety_doc: "- The function has been called before.\n
 - The closure is not `Send`, if calling from a different thread than the current one."
 );
@@ -786,10 +789,10 @@ bare_closure_impl!(
 bare_closure_impl!(
     ty_name: BareFnMutAny,
     erased_ty_name: UntypedBareFnMut,
-    non_send_alias: BareFnMut,
-    send_alias: BareFnMutSend,
+    non_sync_alias: BareFnMut,
+    sync_alias: BareFnMutSync,
     sync_bounds: (Send), // For FnMut we only need Send to make synchronized calls safe
-    send_alias_bound: dyn Send + 'a,
+    sync_alias_bound: dyn Send + 'a,
     trait_ident: FnMutThunk,
     thunk_template: THUNK_TEMPLATE_MUT,
     bare_toggle: cfg(all()),
@@ -799,8 +802,8 @@ bare_closure_impl!(
     with_cc_doc: "[`with_cc`](BareFnMutAny::with_cc)",
     with_cc_in_doc: "[`with_cc_in`](BareFnMutAny::with_cc_in)",
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnMutAny::try_with_cc_in)",
-    non_send_alias_doc:  "[`BareFnMut`]",
-    send_alias_doc: "[`BareFnMutSend`]",
+    non_sync_alias_doc:  "[`BareFnMut`]",
+    sync_alias_doc: "[`BareFnMutSend`]",
     safety_doc: "- The mutable borrow induced by a previous call is still active (e.g. through recursion)
   or concurrent (has no happens-before relationship) with the current one.\n
 - The closure is not `Send`, if calling from a different thread than the current one."
@@ -808,10 +811,10 @@ bare_closure_impl!(
 bare_closure_impl!(
     ty_name: BareFnAny,
     erased_ty_name: UntypedBareFn,
-    non_send_alias: BareFn,
-    send_alias: BareFnSend,
+    non_sync_alias: BareFn,
+    sync_alias: BareFnSync,
     sync_bounds: (Sync),
-    send_alias_bound: dyn Send + Sync + 'a,
+    sync_alias_bound: dyn Send + Sync + 'a,
     trait_ident: FnThunk,
     thunk_template: THUNK_TEMPLATE,
     bare_toggle: cfg(all()),
@@ -821,7 +824,7 @@ bare_closure_impl!(
     with_cc_doc: "[`with_cc`](BareFnAny::with_cc)",
     with_cc_in_doc: "[`with_cc_in`](BareFnAny::with_cc_in)",
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnAny::try_with_cc_in)",
-    non_send_alias_doc:  "[`BareFn`]",
-    send_alias_doc: "[`BareFnSend`]",
+    non_sync_alias_doc:  "[`BareFn`]",
+    sync_alias_doc: "[`BareFnSend`]",
     safety_doc: "- The closure is not `Sync`, if calling from a different thread than the current one."
 );
