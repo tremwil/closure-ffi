@@ -357,7 +357,7 @@ macro_rules! bare_closure_impl {
         #[doc = $non_sync_alias_doc]
         /// and
         #[doc = $sync_alias_doc]
-        /// type aliases for the common cases of `S = dyn Any + 'a` (no thread safety constraints)
+        /// type aliases for the common cases of [`S = dyn Any + 'a`](Any) (no thread safety constraints)
         /// and
         #[doc = $sync_alias_bound_doc]
         /// (minimum required to safely store/call the closure from other threads), respectively.
@@ -392,7 +392,7 @@ macro_rules! bare_closure_impl {
         #[doc = $non_sync_alias_doc]
         /// and
         #[doc = $sync_alias_doc]
-        /// type aliases for the common cases of `S = dyn Any + 'a` (no thread safety constraints)
+        /// type aliases for the common cases of [`S = dyn Any + 'a`](Any) (no thread safety constraints)
         /// and
         #[doc = $sync_alias_bound_doc]
         /// (minimum required to safely store/call the closure from other threads), respectively.
@@ -786,7 +786,7 @@ bare_closure_impl!(
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnOnceAny::try_with_cc_in)",
     non_sync_alias_doc: "[`BareFnOnce`]",
     sync_alias_doc: "[`BareFnOnceSend`]",
-    sync_alias_bound_doc: "[`dyn Send + 'a`](Send)",
+    sync_alias_bound_doc: "[`S = dyn Send + 'a`](Send)",
     safety_doc: "- The function has been called before.\n
 - The closure is not `Send`, if calling from a different thread than the current one."
 );
@@ -809,7 +809,7 @@ bare_closure_impl!(
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnMutAny::try_with_cc_in)",
     non_sync_alias_doc:  "[`BareFnMut`]",
     sync_alias_doc: "[`BareFnMutSend`]",
-    sync_alias_bound_doc: "[`dyn Send + 'a`](Send)",
+    sync_alias_bound_doc: "[`S = dyn Send + 'a`](Send)",
     safety_doc: "- The mutable borrow induced by a previous call is still active (e.g. through recursion)
   or concurrent (has no happens-before relationship) with the current one.\n
 - The closure is not `Send`, if calling from a different thread than the current one."
@@ -832,6 +832,6 @@ bare_closure_impl!(
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnAny::try_with_cc_in)",
     non_sync_alias_doc:  "[`BareFn`]",
     sync_alias_doc: "[`BareFnSend`]",
-    sync_alias_bound_doc: "[`dyn Send + Sync + 'a`](Sync)",
+    sync_alias_bound_doc: "[`S = dyn Send + Sync + 'a`](Sync)",
     safety_doc: "- The closure is not `Sync`, if calling from a different thread than the current one."
 );
