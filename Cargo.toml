@@ -29,9 +29,9 @@ test = true
 default = ["std", "default_jit_alloc"]
 std = []
 global_jit_alloc = []
-# Spin is needed on no_std, but not std.
+# spin is needed on no_std, but not std.
 # Sadly there is no way to enable a dependency when a feature is *not* set
-default_jit_alloc = ["global_jit_alloc", "dep:jit-allocator2", "dep:spin"]
+default_jit_alloc = ["global_jit_alloc", "dep:jit-allocator2", "spin"]
 unstable = []
 tuple_trait = ["unstable"]
 c_variadic = ["unstable"]
