@@ -67,3 +67,7 @@ unsafe extern "C" fn ffi_unregister_callback(cb: unsafe extern "C" fn(u32)) {
     println!("{sum}");
 }
 ```
+
+# Credits
+- [tremwil](https://github.com/tremwil/): Library author and maintainer
+- [Dasaav](https://github.com/Dasaav-dsv/): `lock (x14) push eax` x86 byte sequence idea
