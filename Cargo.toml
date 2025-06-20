@@ -33,6 +33,7 @@ custom_jit_alloc = []
 unstable = []
 tuple_trait = ["unstable"]
 c_variadic = ["unstable"]
+coverage = ["unstable"]
 proc_macros = ["dep:closure-ffi-proc-macros"]
 full = ["bundled_jit_alloc", "proc_macros"]
 
@@ -40,6 +41,9 @@ full = ["bundled_jit_alloc", "proc_macros"]
 closure-ffi-proc-macros = { path = "proc_macros", version = "2.4.0", optional = true }
 jit-allocator2 = {version = "0.2.9", optional = true }
 spin = { version = "0.10", optional = true }
+
+[build-dependencies]
+rustflags = "0.1.7"
 
 [target.'cfg(all(target_arch = "arm", target_os = "linux"))'.dependencies]
 libc = "0.2"

@@ -5,15 +5,8 @@
 #![cfg_attr(feature = "unstable", feature(ptr_metadata))]
 #![cfg_attr(feature = "tuple_trait", feature(tuple_trait))]
 #![cfg_attr(feature = "c_variadic", feature(c_variadic))]
+#![cfg_attr(feature = "coverage", feature(coverage_attribute))]
 #![doc = include_str!("../README.md")]
-
-#[cfg(all(
-    not(target_arch = "x86_64"),
-    not(target_arch = "x86"),
-    not(target_arch = "aarch64"),
-    not(target_arch = "arm")
-))]
-compile_error!("closure-ffi is not supported on this target architecture.");
 
 #[cfg(all(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
 compile_error!("only one of bundled_jit_alloc or custom_jit_alloc may be specified");
