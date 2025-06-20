@@ -18,6 +18,8 @@ pub mod magic {
         // SAFETY: bit pattern is valid for dest type and sizes match
         unsafe { core::mem::transmute_copy(&LockPushRax([0xF0; 14], [0xFF, 0xF0])) }
     };
+
+    pub(super) const THUNK_EXTRA_RETURN: usize = size_of::<Type>();
 }
 
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
@@ -27,22 +29,24 @@ pub mod magic {
 
     // UDF 0xDEAD repeated twice
     #[cfg(target_arch = "aarch64")]
-    pub const CLOSURE_ADDR_MAGIC: usize = 0x0000DEAD0000DEAD_u64 as usize;
+    pub const CLOSURE_ADDR_MAGIC: Type = 0x0000DEAD0000DEAD_u64 as usize;
 
     // UDF 0xDEAD
     #[cfg(all(target_arch = "arm", not(thumb_mode)))]
-    pub const CLOSURE_ADDR_MAGIC: usize = 0xE7FDEAFD;
+    pub const CLOSURE_ADDR_MAGIC: Type = 0xE7FDEAFD;
 
     // UDF #42 repeated twice
     #[cfg(all(target_arch = "arm", thumb_mode))]
-    pub const CLOSURE_ADDR_MAGIC: usize = 0xDE2ADE2A;
+    pub const CLOSURE_ADDR_MAGIC: Type = 0xDE2ADE2A;
+
+    pub(super) const THUNK_EXTRA_RETURN: usize = super::THUNK_EXTRA_SIZE;
 }
+
+const THUNK_EXTRA_SIZE: usize = 2 * size_of::<usize>();
 
 // We perform aligned reads at the pointer size, so make sure the align is sufficient
 const _ASSERT_MAGIC_TYPE_SUFFICIENT_ALIGN: () =
     assert!(align_of::<magic::Type>() >= align_of::<usize>());
-
-const THUNK_EXTRA_SIZE: usize = size_of::<usize>() * 2; // closure addr, return addr
 
 // We have to expose the thunk asm macros to allow the hrtb_cc proc macro to generate more complex
 // thunk templates
@@ -206,7 +210,7 @@ pub(crate) unsafe fn create_thunk<J: JitAlloc>(
     rw.add(offset).cast::<*const ()>().write(closure_ptr);
 
     // Write the jump back to the compiler-generated thunk
-    let thunk_return = thunk_template.add(thunk_size);
+    let thunk_return = thunk_template.add(offset + magic::THUNK_EXTRA_RETURN);
     // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
     #[cfg(thumb_mode)]
     let thunk_return = thunk_return.map_addr(|a| a | 1);
