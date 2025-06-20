@@ -167,10 +167,9 @@ fn test_unwind_fn() {
     assert!(result.is_err())
 }
 
+#[cfg(not(feature = "no_std"))]
 #[test]
 fn test_untyped_bare_fn() {
-    #[cfg(feature = "no_std")]
-    use alloc::vec::Vec;
     use core::cell::Cell;
 
     // Use this type to verify that our closures were dropped
