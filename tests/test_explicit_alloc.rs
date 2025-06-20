@@ -1,3 +1,6 @@
+// On no_std, we need `spin` to provide the `spin::Lazy` impl for JitAlloc
+#![cfg(any(feature = "std", feature = "spin"))]
+
 mod slab_alloc;
 
 #[allow(unused_imports)]
