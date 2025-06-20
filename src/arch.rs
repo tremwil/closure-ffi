@@ -76,7 +76,7 @@ macro_rules! _thunk_asm {
     ($closure_ptr:ident) => {
         ::core::arch::asm!(
             "mov $1f, {cl_addr}",
-            "mov $1f+$4, {jmp_addr}",
+            "mov $1f+4, {jmp_addr}",
             "jmp *{jmp_addr}",
             ".balign 8, 0xCC",
             "1:",
