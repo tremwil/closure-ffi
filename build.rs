@@ -56,8 +56,7 @@ fn check_coverage_supported() {
     }
 
     if rustflags::from_env()
-        .find(|f| matches!(f, Flag::Codegen { opt, value: _ } if opt == "instrument-coverage"))
-        .is_some()
+        .any(|f| matches!(f, Flag::Codegen { opt, value: _ } if opt == "instrument-coverage"))
     {
         println!(
             "cargo::error=closure-ffi requires a nightly compiler and the 'coverage' crate feature \
