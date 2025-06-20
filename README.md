@@ -8,6 +8,8 @@ scenarios, e.g. function hooking for game modding/hacking.
 
 # Features
 The crate comes with the following feature flags:
+
+## Stable
 - `no_std`: Makes the crate compatible with `#![no_std]`. A dependency on `alloc` and `spin` is
   still required.
 - `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator2`](https://crates.io/crates/jit-allocator2)
@@ -18,14 +20,17 @@ The crate comes with the following feature flags:
   functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>`
   statements), as well as the `bare_dyn` proc macro for writing `BareFn*` types of boxed 
   closures (i.e. `Box<dyn Fn()>`) more concisely. 
+- `full`: Enables `bundled_jit_alloc` and `proc_macros` features.
+
+## Unstable (require a nightly compiler)
 - `unstable`: Enable the use of unstable Rust features for aspects of the crate that benefit from 
   them without causing any API breaks. Unstable features that can cause breaking changes when enabled 
-  are gated separately.
+  are gated separately, and also enable this feature.
 - `tuple_trait`: Adds a [`core::marker::Tuple`](https://doc.rust-lang.org/nightly/core/marker/trait.Tuple.html)
   bound on `FnPtr::Args`. This allows downstream crates to easily integrate the library with closure-related
-  nightly features such as `unboxed_closures` and `fn_traits`. Also enables the `unstable` feature. 
+  nightly features such as `unboxed_closures` and `fn_traits`.
 - `c_variadic`: Adds *partial* (no invocation through `call`) `FnPtr` and `Fn*Thunk` implementations for variadic functions.
-- `full`: Enables `bundled_jit_alloc` and `proc_macros` features.
+- `coverage`: Enables support for the `-C instrument-coverage` compiler flag.
 
 # Examples
 Passing a closure to a C API taking a contextless function pointer:
