@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking Changes
 - `ToBoxedUnsize` is now an unsafe trait.
 - `Send` and `Sync` impl bounds on `BareFn` are now stricter to catch more unsafety.
+- Major overhaul of feature flags. See README to view the changes.
 
 ### Added
 - `UntypedBareFn*` types that erase the bare function type entirely. Can be used to store
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Change thunk assembly magic numbers/sentinel values to sequences that are guaranteed to not be emitted by the compiler.
   Thanks to @Dasaav-dsv for the help.
 - Move most of the arch/feature compile_error checks into the build script for better errors.
+- Dual license under Apache-2.0 and MIT.
 
 ## [v2.4.0] - 2025-06-08
 
