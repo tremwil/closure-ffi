@@ -6,6 +6,7 @@ use quote::{quote, ToTokens};
 use syn::{parse_macro_input, visit::Visit, visit_mut::VisitMut};
 
 struct MacroInput {
+    thunk_attrs: Vec<syn::Attribute>,
     crate_path: syn::Path,
     alias: syn::ItemType,
     bare_fn: syn::TypeBareFn,
@@ -13,6 +14,7 @@ struct MacroInput {
 
 impl syn::parse::Parse for MacroInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let thunk_attrs = input.call(syn::Attribute::parse_outer)?;
         let crate_path = input.parse()?;
         let _: syn::Token![,] = input.parse()?;
         let alias: syn::ItemType = input.parse()?;
@@ -61,6 +63,7 @@ impl syn::parse::Parse for MacroInput {
                 match implicit_lt_err {
                     Some(err) => Err(err),
                     None => Ok(Self {
+                        thunk_attrs,
                         crate_path,
                         bare_fn: bare_fn.clone(),
                         alias,
@@ -235,6 +238,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
         },
     ];
 
+    let thunk_attrs = &input.thunk_attrs;
     let alias_ident = &input.alias.ident;
     let alias_attrs = &input.alias.attrs;
     let alias_vis = &input.alias.vis;
@@ -270,6 +274,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             for (#cc_marker_ident, #f_ident) #where_clause
             {
                 const #const_ident: *const ::core::primitive::u8 = {
+                    #(#thunk_attrs)*
                     #thunk_sig {
                         #body
                     }

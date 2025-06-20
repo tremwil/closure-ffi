@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `UntypedBareFn*` types that erase the bare function type entirely. Can be used to store
   `BareFn*` wrappers of different types in a data structure.
+- `codecov` support
 
 ### Changed
 - Change thunk assembly magic numbers/sentinel values to sequences that are guaranteed to not be emitted by the compiler.

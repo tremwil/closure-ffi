@@ -51,6 +51,7 @@ dependencies = [
  "jit-allocator2",
  "libc",
  "region",
+ "rustflags",
  "spin",
 ]
 
@@ -199,6 +200,12 @@ dependencies = [
  "mach2",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "rustflags"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a39e0e9135d7a7208ee80aa4e3e4b88f0f5ad7be92153ed70686c38a03db2e63"
 
 [[package]]
 name = "scopeguard"
