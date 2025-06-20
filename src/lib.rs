@@ -2,6 +2,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(feature = "no_std", no_std)]
 #![cfg_attr(feature = "unstable", feature(unsize))]
+#![cfg_attr(feature = "unstable", feature(ptr_metadata))]
 #![cfg_attr(feature = "tuple_trait", feature(tuple_trait))]
 #![cfg_attr(feature = "c_variadic", feature(c_variadic))]
 #![doc = include_str!("../README.md")]
@@ -38,8 +39,8 @@ pub mod traits;
 pub mod prelude {
     #[doc(inline)]
     pub use super::bare_closure::{
-        BareFn, BareFnAny, BareFnMut, BareFnMutAny, BareFnMutSend, BareFnOnce, BareFnOnceAny,
-        BareFnOnceSend, BareFnSend,
+        BareFn, BareFnAny, BareFnMut, BareFnMutAny, BareFnMutSync, BareFnOnce, BareFnOnceAny,
+        BareFnOnceSync, BareFnSync, UntypedBareFn, UntypedBareFnMut, UntypedBareFnOnce,
     };
     #[doc(inline)]
     pub use super::cc;

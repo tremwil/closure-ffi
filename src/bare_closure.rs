@@ -1,5 +1,47 @@
 //! Provides the [`BareFnOnce`], [`BareFnMut`] and [`BareFn`] wrapper types which allow closures to
 //! be called through context-free unsafe bare functions.
+//!
+//! Variants which erase the signature of the bare function (e.g. [`UntypedBareFn`]) are also
+//! provided. This can be useful when a type needs to own wrappers for functions of different
+//! signatures.
+//!
+//! # Thread Safety
+//!
+//! The closure wrapper types provided by this module are (trivially) [`Send`] if and only if both
+//! the closure's type-erased storage and the executable memory allocator used are.
+//!
+//! Canonically, they should also always be [`Sync`], as the invariants required for soundly
+//! calling the wrapped closure across threads are encoded in the `unsafe`ness of the
+//! bare function pointer returned by [`BareFnOnce::leak`], [`BareFnMut::bare`] and
+//! [`BareFn::bare`], and documented on these (safe) functions.
+//!
+//! However, such a [`Sync`] impl makes it very easy to call the bare function in situations where
+//! it is not allowed:
+//!
+//! ```compile_fail
+//! use closure_ffi::BareFn;
+//! use std::{cell::Cell, thread};
+//! let cell = Cell::new(0);
+//! // WARNING: `wrapped` is Sync, but not the closure!
+//! let wrapped = BareFn::new_c(move || -> u32 {
+//!     let val = cell.get();
+//!     cell.set(val + 1);
+//!     val
+//! });
+//! // `wrapped` can be borrowed here at is it Sync. But by `bare()` documentation,
+//! // calling the function is unsound as the closure is not Sync!
+//! thread::scope(|s| {
+//!     s.spawn(|| unsafe { wrapped.bare()() });
+//!     s.spawn(|| unsafe { wrapped.bare()() });
+//! });
+//! ```
+//!
+//! To help guard against this, [`Sync`] is only implemented:
+//! - for [`BareFnOnceAny`]: When the closure is [`Send`]. The user is still responsible for
+//!   guarding against repeated calls.
+//! - for [`BareFnMutAny`]: When the closure is [`Send`]. The user is still responsible for guarding
+//!   against unsynchronized calls.
+//! - for [`BareFnAny`]: When the closure is [`Sync`].
 
 use core::{marker::PhantomData, mem::ManuallyDrop};
 
@@ -153,8 +195,11 @@ macro_rules! cc_shorthand_in {
 macro_rules! bare_closure_impl {
     (
         ty_name: $ty_name:ident,
-        non_send_alias: $non_send_alias:ident,
-        send_alias: $send_alias:ident,
+        erased_ty_name: $erased_ty_name:ident,
+        non_sync_alias: $non_sync_alias:ident,
+        sync_alias: $sync_alias:ident,
+        sync_bounds: ($($sync_bounds: path),*),
+        sync_alias_bound: $sync_alias_bound: ty,
         trait_ident: $trait_ident:ident,
         thunk_template: $thunk_template:ident,
         bare_toggle: $bare_toggle:meta,
@@ -164,10 +209,149 @@ macro_rules! bare_closure_impl {
         with_cc_doc: $with_cc_doc:literal,
         with_cc_in_doc: $with_cc_in_doc:literal,
         try_with_cc_in_doc: $try_with_cc_in_doc:literal,
-        non_send_alias_doc: $non_send_alias_doc:literal,
-        send_alias_doc: $send_alias_doc:literal,
+        non_sync_alias_doc: $non_sync_alias_doc:literal,
+        sync_alias_doc: $sync_alias_doc:literal,
+        sync_alias_bound_doc: $sync_alias_bound_doc:literal,
         safety_doc: $safety_doc:literal
     ) => {
+        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+        #[cfg_attr(docsrs, doc(cfg(all())))]
+        /// Type-erased wrapper around a
+        #[doc = $fn_trait_doc]
+        /// closure which exposes a pointer to a bare function thunk.
+        ///
+        /// This type cannot be directly constructed; it must be produced from a
+        #[doc = $ty_name_doc]
+        /// through the `into_untyped` method or the [`Into`] trait.
+        ///
+        /// # Type parameters
+        /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
+        ///   lifetime bounds and marker traits which the closure must satsify, e.g. `S = dyn Send +
+        ///   'a`. Without the `unstable` feature, this is limited to [`dyn Any`](Any) and
+        ///   combinations of [`Send`] and [`Sync`] marker types.
+        /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
+        ///
+        /// # Layout
+        #[doc = $ty_name_doc]
+        /// is `#[repr(transparent)]` with this type, so it is safe to transmute back and forth
+        /// provided the type parameters match.
+        #[allow(dead_code)]
+        pub struct $erased_ty_name<S: ?Sized, A: JitAlloc = GlobalJitAlloc> {
+            thunk_info: ThunkInfo,
+            jit_alloc: A,
+            // We can't directly own the closure, even through an UnsafeCell.
+            // Otherwise, holding a reference to a BareFnMut while the bare function is
+            // being called would be UB! So we reclaim the pointer in the Drop impl.
+            storage: *mut S,
+        }
+
+        // We copy the documentation to this type, since IDEs will often fetch it from here for
+        // pop-up documentation if neither feature is on
+        #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
+        /// Type-erased wrapper around a
+        #[doc = $fn_trait_doc]
+        /// closure which exposes a pointer to a bare function thunk.
+        ///
+        /// This type cannot be directly constructed; it must be produced from a
+        #[doc = $ty_name_doc]
+        /// through the `into_untyped` method or the [`Into`] trait.
+        ///
+        /// # Type parameters
+        /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
+        ///   lifetime bounds and marker traits which the closure must satsify, e.g. `S = dyn Send +
+        ///   'a`. Without the `unstable` feature, this is limited to [`dyn Any`](Any) and
+        ///   combinations of [`Send`] and [`Sync`] marker types.
+        /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
+        ///
+        /// # Layout
+        #[doc = $ty_name_doc]
+        /// is `#[repr(transparent)]` with this type, so it is safe to transmute back and forth
+        /// provided the type parameters match.
+        #[allow(dead_code)]
+        pub struct $erased_ty_name<S: ?Sized, A: JitAlloc> {
+            thunk_info: ThunkInfo,
+            jit_alloc: A,
+            storage: *mut S,
+        }
+
+        // SAFETY: S and A can be moved to other threads
+        unsafe impl<S: ?Sized + Send, A: JitAlloc + Send> Send for $erased_ty_name<S, A> {}
+        // SAFETY: See macro invocation
+        unsafe impl<S: $($sync_bounds+)* ?Sized, A: JitAlloc> Sync for $erased_ty_name<S, A> {}
+
+        impl<S: ?Sized, A: JitAlloc> $erased_ty_name<S, A> {
+            #[$bare_toggle]
+            /// Return a type-erased pointer to the bare function thunk wrapping the closure.
+            ///
+            /// # Safety
+            /// While this method is safe, using the returned pointer is very much not. In
+            /// particular, the only safe thing to do with it is casting it to the exact bare
+            /// function signature it had before erasure. Even then, it must not be called when:
+            /// - The lifetime of `self` has expired, or `self` has been dropped.
+            #[doc = $safety_doc]
+            #[inline]
+            pub fn bare(self: $bare_receiver) -> *const () {
+                self.thunk_info.thunk
+            }
+
+            /// Leak the underlying closure, returning the unsafe bare function pointer that invokes
+            /// it.
+            ///
+            /// `self` must be `'static` for this method to be called.
+            ///
+            /// # Safety
+            /// While this method is safe, using the returned pointer is very much not. In
+            /// particular, the only safe thing to do with it is casting it to the exact bare
+            /// function signature it had before erasure. Even then, it must not be called when:
+            #[doc = $safety_doc]
+            #[inline]
+            pub fn leak(self) -> *const ()
+            where
+                Self: 'static,
+            {
+                ManuallyDrop::new(self).thunk_info.thunk
+            }
+
+            pub fn upcast<U: ?Sized>(self) -> $erased_ty_name<U, A>
+                where PhantomData<S>: ToBoxedUnsize<U>
+            {
+                // SAFETY: This is fine on stable since all trait objects implementing `ToBoxedUnsize`
+                // only have the destructor in their vtable.
+                //
+                // With the `unstable` feature, it's sketchy as a boxed `dyn Subtrait` can `Unsize` into
+                // a `dyn Supertrait` when `Subtrait: Supertrait`. However, the undocumented layout of
+                // trait object vtables makes the destructor the first entry, so it's fine for now
+                // (and the foreseeable future).
+                unsafe { core::mem::transmute_copy(&ManuallyDrop::new(self)) }
+            }
+        }
+
+        impl<B: FnPtr, S: ?Sized, U: ?Sized, A: JitAlloc> From<$ty_name<B, S, A>> for $erased_ty_name<U, A>
+            where PhantomData<S>: ToBoxedUnsize<U>
+        {
+            fn from(value: $ty_name<B, S, A>) -> Self {
+                value.into_untyped().upcast()
+            }
+        }
+
+        impl<S: ?Sized, A: JitAlloc> Drop for $erased_ty_name<S, A> {
+            fn drop(&mut self) {
+                // Don't panic on allocator failures for safety reasons
+                // SAFETY:
+                // - The caller of `bare()` promised not to call through the thunk after
+                // the lifetime of self expires
+                // - alloc_base is RX memory previously allocated by jit_alloc which has not been
+                // freed yet
+                unsafe { self.jit_alloc.release(self.thunk_info.alloc_base).ok() };
+
+                // Free the closure
+                // SAFETY:
+                // - The caller of `bare()` promised not to call through the thunk after
+                // the lifetime of self expires, so no borrow on closure exists
+                drop(unsafe { Box::from_raw(self.storage) })
+            }
+        }
+
         #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
         /// Wrapper around a
@@ -179,26 +363,27 @@ macro_rules! bare_closure_impl {
         /// This is a generic implementation which allows customizing the closure's
         /// type erased storage, which allows enforcing trait bounds like `Send` and `Sync` when
         /// needed. However, this plays poorly with type inference. Consider using the
-        #[doc = $non_send_alias_doc]
+        #[doc = $non_sync_alias_doc]
         /// and
-        #[doc = $send_alias_doc]
-        /// type aliases for the common cases of `S = dyn Any + 'a` and `S = dyn Send + 'a`.
+        #[doc = $sync_alias_doc]
+        /// type aliases for the common cases of [`S = dyn Any + 'a`](Any) (no thread safety constraints)
+        /// and
+        #[doc = $sync_alias_bound_doc]
+        /// (minimum required to safely store/call the closure from other threads), respectively.
         ///
         /// # Type parameters
         /// - `B`: The bare function pointer to expose the closure as. For higher-kinded bare
         ///   function pointers, you will need to use the [`bare_hrtb`] macro to define a wrapper
         ///   type.
-        /// - `S`: The dynamically-sized type to use to type-erase the closure. By default, this is
-        ///   [`dyn Any`](Any) which is implemented by all `'static` types.
+        /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
+        ///   lifetime bounds and marker traits which the closure must satsify, e.g. `S = dyn Send +
+        ///   'a`. Without the `unstable` feature, this is limited to [`dyn Any`](Any) and
+        ///   combinations of [`Send`] and [`Sync`] marker types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
         #[allow(dead_code)]
+        #[repr(transparent)]
         pub struct $ty_name<B: FnPtr, S: ?Sized, A: JitAlloc = GlobalJitAlloc> {
-            thunk_info: ThunkInfo,
-            jit_alloc: A,
-            // We can't directly own the closure, even through an UnsafeCell.
-            // Otherwise, holding a reference to a BareFnMut while the bare function is
-            // being called would be UB! So we reclaim the pointer in the Drop impl.
-            storage: *mut S,
+            untyped: $erased_ty_name<S, A>,
             phantom: PhantomData<B>,
         }
 
@@ -213,33 +398,105 @@ macro_rules! bare_closure_impl {
         /// This is a generic implementation which allows customizing the closure's
         /// type erased storage, which allows enforcing trait bounds like `Send` and `Sync` when
         /// needed. However, this plays poorly with type inference. Consider using the
-        #[doc = $non_send_alias_doc]
+        #[doc = $non_sync_alias_doc]
         /// and
-        #[doc = $send_alias_doc]
-        /// type aliases for the common cases of `S = dyn Any + 'a` and `S = dyn Send + 'a`.
+        #[doc = $sync_alias_doc]
+        /// type aliases for the common cases of [`S = dyn Any + 'a`](Any) (no thread safety constraints)
+        /// and
+        #[doc = $sync_alias_bound_doc]
+        /// (minimum required to safely store/call the closure from other threads), respectively.
         ///
         /// # Type parameters
         /// - `B`: The bare function pointer to expose the closure as. For higher-kinded bare
         ///   function pointers, you will need to use the [`bare_hrtb`] macro to define a wrapper
         ///   type.
-        /// - `S`: The dynamically-sized type to use to type-erase the closure. Without the
-        ///   `unstable` feature, this is limited to [`dyn Any`](Any) and combinations of [`Send`]
-        ///   and [`Sync`] marker types.
+        /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
+        ///   lifetime bounds and marker traits which the closure must satsify, e.g. `S = dyn Send +
+        ///   'a`. Without the `unstable` feature, this is limited to [`dyn Any`](Any) and
+        ///   combinations of [`Send`] and [`Sync`] marker types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
         #[allow(dead_code)]
         pub struct $ty_name<B: FnPtr, S: ?Sized, A: JitAlloc> {
-            thunk_info: ThunkInfo,
-            jit_alloc: A,
-            storage: *mut S,
+            untyped: $erased_ty_name<S, A>,
             phantom: PhantomData<B>,
         }
 
-        // SAFETY: S and A can be moved to other threads
-        unsafe impl<B: FnPtr, S: ?Sized + Send, A: JitAlloc + Send> Send for $ty_name<B, S, A> {}
-        // SAFETY: The references to S and A cannot be accessed given a &Self
-        unsafe impl<B: FnPtr, S: ?Sized, A: JitAlloc> Sync for $ty_name<B, S, A> {}
+        // Split the impl blocks so that the relevant functions appear first in docs
+        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+        impl<B: FnPtr, S: ?Sized> $ty_name<B, S, GlobalJitAlloc> {
+            /// Wraps `fun`, producing a bare function of signature `B`.
+            ///
+            /// This constructor is best used when the type of `B` is already known from an existing
+            /// type annotation. If you want to infer `B` from the closure arguments and a calling
+            /// convention, consider using
+            #[doc = $with_cc_doc]
+            /// or the `new_*` suffixed constructors instead.
+            ///
+            /// The W^X memory required is allocated using the global JIT allocator.
+            #[inline]
+            pub fn new<F>(fun: F) -> Self
+            where
+                F: ToBoxedUnsize<S>,
+                (B::CC, F): $trait_ident<B>,
+            {
+                Self::new_in(fun, Default::default())
+            }
+
+            /// Wraps `fun`, producing a bare function with calling convention `cconv`.
+            ///
+            /// The W^X memory required is allocated using the global JIT allocator.
+            #[inline]
+            pub fn with_cc<CC, F>(cconv: CC, fun: F) -> Self
+            where
+                F: ToBoxedUnsize<S>,
+                (CC, F): $trait_ident<B>,
+            {
+                Self::with_cc_in(cconv, fun, Default::default())
+            }
+        }
 
         impl<B: FnPtr, S: ?Sized, A: JitAlloc> $ty_name<B, S, A> {
+            #[$bare_toggle]
+            /// Return a bare function pointer that invokes the underlying closure.
+            ///
+            /// # Safety
+            /// While this method is safe, the returned function pointer is not. In particular, it
+            /// must not be called when:
+            /// - The lifetime of `self` has expired, or `self` has been dropped.
+            #[doc = $safety_doc]
+            #[inline]
+            pub fn bare(self: $bare_receiver) -> B {
+                // SAFETY: B is a bare function pointer
+                unsafe { B::from_ptr(self.untyped.bare()) }
+            }
+
+            /// Leak the underlying closure, returning the unsafe bare function pointer that invokes
+            /// it.
+            ///
+            /// `self` must be `'static` for this method to be called.
+            ///
+            /// # Safety
+            /// While this method is safe, the returned function pointer is not. In particular, it
+            /// must not be called when:
+            #[doc = $safety_doc]
+            #[inline]
+            pub fn leak(self) -> B
+            where
+                Self: 'static,
+            {
+                // SAFETY: B is a bare function pointer
+                unsafe { B::from_ptr(self.untyped.leak()) }
+            }
+
+            /// Erase the signature type from this
+            #[doc = $ty_name_doc]
+            ///
+            /// The returned value also exposes the [`Self::bare`] and [`Self::leak`] functions.
+            /// However, they now return untyped pointers.
+            pub fn into_untyped(self) -> $erased_ty_name<S, A> {
+                self.untyped
+            }
+
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.
             ///
             /// Uses the provided JIT allocator to allocate the W^X memory used to create the thunk.
@@ -262,9 +519,11 @@ macro_rules! bare_closure_impl {
                     create_thunk(<(CC, F)>::$thunk_template, storage as *const _, &jit_alloc)?
                 };
                 Ok(Self {
-                    thunk_info,
-                    jit_alloc,
-                    storage,
+                    untyped: $erased_ty_name {
+                        thunk_info,
+                        jit_alloc,
+                        storage,
+                    },
                     phantom: PhantomData,
                 })
             }
@@ -309,159 +568,10 @@ macro_rules! bare_closure_impl {
             {
                 Self::with_cc_in(B::CC::default(), fun, jit_alloc)
             }
-
-            cc_shorthand_in!(new_c_in, $trait_ident, cc::C, "C");
-
-            cc_shorthand_in!(new_system_in, $trait_ident, cc::System, "system");
-
-            cc_shorthand_in!(
-                new_sysv64_in,
-                $trait_ident,
-                cc::Sysv64,
-                "sysv64",
-                all(not(windows), target_arch = "x86_64")
-            );
-
-            cc_shorthand_in!(
-                new_aapcs_in,
-                $trait_ident,
-                cc::Aapcs,
-                "aapcs",
-                any(doc, target_arch = "arm")
-            );
-
-            cc_shorthand_in!(
-                new_fastcall_in,
-                $trait_ident,
-                cc::Fastcall,
-                "fastcall",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
-            );
-
-            cc_shorthand_in!(
-                new_stdcall_in,
-                $trait_ident,
-                cc::Stdcall,
-                "stdcall",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
-            );
-
-            cc_shorthand_in!(
-                new_cdecl_in,
-                $trait_ident,
-                cc::Cdecl,
-                "cdecl",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
-            );
-
-            cc_shorthand_in!(
-                new_thiscall_in,
-                $trait_ident,
-                cc::Thiscall,
-                "thiscall",
-                all(windows, target_arch = "x86")
-            );
-
-            cc_shorthand_in!(
-                new_win64_in,
-                $trait_ident,
-                cc::Win64,
-                "win64",
-                all(windows, target_arch = "x86_64")
-            );
-
-            cc_shorthand_in!(
-                new_variadic_in,
-                $trait_ident,
-                cc::Variadic,
-                "`C` variadic",
-                feature = "c_variadic"
-            );
-
-            #[$bare_toggle]
-            /// Return a bare function pointer that invokes the underlying closure.
-            ///
-            /// # Safety
-            /// While this method is safe, the returned function pointer is not. In particular, it
-            /// must not be called when:
-            /// - The lifetime of `self` has expired, or `self` has been dropped.
-            #[doc = $safety_doc]
-            #[inline]
-            pub fn bare(self: $bare_receiver) -> B {
-                // SAFETY: B is a bare function pointer
-                unsafe { B::from_ptr(self.thunk_info.thunk) }
-            }
-
-            /// Leak the underlying closure, returning the unsafe bare function pointer that invokes
-            /// it.
-            ///
-            /// `self` must be `'static` for this method to be called.
-            ///
-            /// # Safety
-            /// While this method is safe, the returned function pointer is not. In particular, it
-            /// must not be called when:
-            #[doc = $safety_doc]
-            #[inline]
-            pub fn leak(self) -> B
-            where
-                Self: 'static,
-            {
-                let no_drop = ManuallyDrop::new(self);
-                // SAFETY: B is a bare function pointer
-                unsafe { B::from_ptr(no_drop.thunk_info.thunk) }
-            }
-        }
-
-        impl<B: FnPtr, S: ?Sized, A: JitAlloc> Drop for $ty_name<B, S, A> {
-            fn drop(&mut self) {
-                // Don't panic on allocator failures for safety reasons
-                // SAFETY:
-                // - The caller of `bare()` promised not to call through the thunk after
-                // the lifetime of self expires
-                // - alloc_base is RX memory previously allocated by jit_alloc which has not been
-                // freed yet
-                unsafe { self.jit_alloc.release(self.thunk_info.alloc_base).ok() };
-
-                // Free the closure
-                // SAFETY:
-                // - The caller of `bare()` promised not to call through the thunk after
-                // the lifetime of self expires, so no borrow on closure exists
-                drop(unsafe { Box::from_raw(self.storage) })
-            }
         }
 
         #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         impl<B: FnPtr, S: ?Sized> $ty_name<B, S, GlobalJitAlloc> {
-            /// Wraps `fun`, producing a bare function of signature `B`.
-            ///
-            /// This constructor is best used when the type of `B` is already known from an existing
-            /// type annotation. If you want to infer `B` from the closure arguments and a calling
-            /// convention, consider using
-            #[doc = $with_cc_doc]
-            /// or the `new_*` suffixed constructors instead.
-            ///
-            /// The W^X memory required is allocated using the global JIT allocator.
-            #[inline]
-            pub fn new<F>(fun: F) -> Self
-            where
-                F: ToBoxedUnsize<S>,
-                (B::CC, F): $trait_ident<B>,
-            {
-                Self::new_in(fun, Default::default())
-            }
-
-            /// Wraps `fun`, producing a bare function with calling convention `cconv`.
-            ///
-            /// The W^X memory required is allocated using the global JIT allocator.
-            #[inline]
-            pub fn with_cc<CC, F>(cconv: CC, fun: F) -> Self
-            where
-                F: ToBoxedUnsize<S>,
-                (CC, F): $trait_ident<B>,
-            {
-                Self::with_cc_in(cconv, fun, Default::default())
-            }
-
             cc_shorthand!(new_c, $trait_ident, cc::C, "C");
 
             cc_shorthand!(new_system, $trait_ident, cc::System, "system");
@@ -531,6 +641,76 @@ macro_rules! bare_closure_impl {
             );
         }
 
+        impl<B: FnPtr, S: ?Sized, A: JitAlloc> $ty_name<B, S, A> {
+            cc_shorthand_in!(new_c_in, $trait_ident, cc::C, "C");
+
+            cc_shorthand_in!(new_system_in, $trait_ident, cc::System, "system");
+
+            cc_shorthand_in!(
+                new_sysv64_in,
+                $trait_ident,
+                cc::Sysv64,
+                "sysv64",
+                all(not(windows), target_arch = "x86_64")
+            );
+
+            cc_shorthand_in!(
+                new_aapcs_in,
+                $trait_ident,
+                cc::Aapcs,
+                "aapcs",
+                any(doc, target_arch = "arm")
+            );
+
+            cc_shorthand_in!(
+                new_fastcall_in,
+                $trait_ident,
+                cc::Fastcall,
+                "fastcall",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
+
+            cc_shorthand_in!(
+                new_stdcall_in,
+                $trait_ident,
+                cc::Stdcall,
+                "stdcall",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
+
+            cc_shorthand_in!(
+                new_cdecl_in,
+                $trait_ident,
+                cc::Cdecl,
+                "cdecl",
+                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+            );
+
+            cc_shorthand_in!(
+                new_thiscall_in,
+                $trait_ident,
+                cc::Thiscall,
+                "thiscall",
+                all(windows, target_arch = "x86")
+            );
+
+            cc_shorthand_in!(
+                new_win64_in,
+                $trait_ident,
+                cc::Win64,
+                "win64",
+                all(windows, target_arch = "x86_64")
+            );
+
+            cc_shorthand_in!(
+                new_variadic_in,
+                $trait_ident,
+                cc::Variadic,
+                "`C` variadic",
+                feature = "c_variadic"
+            );
+        }
+
         #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
         /// Wrapper around a
@@ -541,7 +721,7 @@ macro_rules! bare_closure_impl {
         /// This is a type alias only. Additional details and methods are described on the
         #[doc = $ty_name_doc]
         /// type.
-        pub type $non_send_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, dyn Any + 'a, A>;
+        pub type $non_sync_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, dyn Any + 'a, A>;
 
         #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
         /// Wrapper around a
@@ -552,30 +732,40 @@ macro_rules! bare_closure_impl {
         /// This is a type alias only. Additional details and methods are described on the
         #[doc = $ty_name_doc]
         /// type.
-        pub type $non_send_alias<'a, B, A> = $ty_name<B, dyn Any + 'a, A>;
+        pub type $non_sync_alias<'a, B, A> = $ty_name<B, dyn Any + 'a, A>;
 
         #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
         #[cfg_attr(docsrs, doc(cfg(all())))]
-        /// Wrapper around a `Send`
+        /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
         /// additional arguments.
         ///
+        /// Unlike
+        #[doc = $non_sync_alias_doc]
+        /// this type enforces the correct combination of [`Send`] and [`Sync`] on the
+        /// closure so that it is safe to both store and call from other threads.
+        ///
         /// This is a type alias only. Additional details and methods are described on the
         #[doc = $ty_name_doc]
         /// type.
-        pub type $send_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, dyn Send + 'a, A>;
+        pub type $sync_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, $sync_alias_bound, A>;
 
         #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
-        /// Wrapper around a `Send`
+        /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
         /// additional arguments.
         ///
+        /// Unlike
+        #[doc = $non_sync_alias_doc]
+        /// this type enforces the correct combination of [`Send`] and [`Sync`] on the
+        /// closure so that it is safe to both store and call from other threads.
+        ///
         /// This is a type alias only. Additional details and methods are described on the
         #[doc = $ty_name_doc]
         /// type.
-        pub type $send_alias<'a, B, A> = $ty_name<B, dyn Send + 'a, A>;
+        pub type $sync_alias<'a, B, A> = $ty_name<B, $sync_alias_bound, A>;
     };
 }
 
@@ -589,8 +779,11 @@ macro_rules! bare_closure_impl {
 
 bare_closure_impl!(
     ty_name: BareFnOnceAny,
-    non_send_alias: BareFnOnce,
-    send_alias: BareFnOnceSend,
+    erased_ty_name: UntypedBareFnOnce,
+    non_sync_alias: BareFnOnce,
+    sync_alias: BareFnOnceSync,
+    sync_bounds: (Send), // FnOnce only needs to be Send
+    sync_alias_bound: dyn Send + 'a,
     trait_ident: FnOnceThunk,
     thunk_template: THUNK_TEMPLATE_ONCE,
     bare_toggle: cfg(any()),
@@ -600,16 +793,20 @@ bare_closure_impl!(
     with_cc_doc: "[`with_cc`](BareFnOnceAny::with_cc)",
     with_cc_in_doc: "[`with_cc_in`](BareFnOnceAny::with_cc_in)",
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnOnceAny::try_with_cc_in)",
-    non_send_alias_doc: "[`BareFnOnce`]",
-    send_alias_doc: "[`BareFnOnceSend`]",
+    non_sync_alias_doc: "[`BareFnOnce`]",
+    sync_alias_doc: "[`BareFnOnceSend`]",
+    sync_alias_bound_doc: "[`S = dyn Send + 'a`](Send)",
     safety_doc: "- The function has been called before.\n
 - The closure is not `Send`, if calling from a different thread than the current one."
 );
 
 bare_closure_impl!(
     ty_name: BareFnMutAny,
-    non_send_alias: BareFnMut,
-    send_alias: BareFnMutSend,
+    erased_ty_name: UntypedBareFnMut,
+    non_sync_alias: BareFnMut,
+    sync_alias: BareFnMutSync,
+    sync_bounds: (Send), // For FnMut we only need Send to make synchronized calls safe
+    sync_alias_bound: dyn Send + 'a,
     trait_ident: FnMutThunk,
     thunk_template: THUNK_TEMPLATE_MUT,
     bare_toggle: cfg(all()),
@@ -619,15 +816,20 @@ bare_closure_impl!(
     with_cc_doc: "[`with_cc`](BareFnMutAny::with_cc)",
     with_cc_in_doc: "[`with_cc_in`](BareFnMutAny::with_cc_in)",
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnMutAny::try_with_cc_in)",
-    non_send_alias_doc:  "[`BareFnMut`]",
-    send_alias_doc: "[`BareFnMutSend`]",
-    safety_doc: "- A borrow induced by a previous call is still active.\n
-- The closure is not `Sync`, if calling from a different thread than the current one."
+    non_sync_alias_doc:  "[`BareFnMut`]",
+    sync_alias_doc: "[`BareFnMutSend`]",
+    sync_alias_bound_doc: "[`S = dyn Send + 'a`](Send)",
+    safety_doc: "- The mutable borrow induced by a previous call is still active (e.g. through recursion)
+  or concurrent (has no happens-before relationship) with the current one.\n
+- The closure is not `Send`, if calling from a different thread than the current one."
 );
 bare_closure_impl!(
     ty_name: BareFnAny,
-    non_send_alias: BareFn,
-    send_alias: BareFnSend,
+    erased_ty_name: UntypedBareFn,
+    non_sync_alias: BareFn,
+    sync_alias: BareFnSync,
+    sync_bounds: (Sync),
+    sync_alias_bound: dyn Send + Sync + 'a,
     trait_ident: FnThunk,
     thunk_template: THUNK_TEMPLATE,
     bare_toggle: cfg(all()),
@@ -637,7 +839,8 @@ bare_closure_impl!(
     with_cc_doc: "[`with_cc`](BareFnAny::with_cc)",
     with_cc_in_doc: "[`with_cc_in`](BareFnAny::with_cc_in)",
     try_with_cc_in_doc: "[`try_with_cc_in`](BareFnAny::try_with_cc_in)",
-    non_send_alias_doc:  "[`BareFn`]",
-    send_alias_doc: "[`BareFnSend`]",
+    non_sync_alias_doc:  "[`BareFn`]",
+    sync_alias_doc: "[`BareFnSend`]",
+    sync_alias_bound_doc: "[`S = dyn Send + Sync + 'a`](Sync)",
     safety_doc: "- The closure is not `Sync`, if calling from a different thread than the current one."
 );

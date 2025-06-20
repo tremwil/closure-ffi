@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v3.0.0] - 2025-06-20
+
+### Breaking Changes
+- `ToBoxedUnsize` is now an unsafe trait.
+- `Send` and `Sync` impl bounds on `BareFn` are now stricter to catch more unsafety.
+
+### Added
+- `UntypedBareFn*` types that erase the bare function type entirely. Can be used to store
+  `BareFn*` wrappers of different types in a data structure.
+
+### Changed
+- Change thunk assembly magic numbers/sentinel values to sequences that are guaranteed to not be emitted by the compiler.
+  Thanks to @Dasaav-dsv for the help.
+
 ## [v2.4.0] - 2025-06-08
 
 ### Added
