@@ -32,6 +32,7 @@ macro_rules! cc_thunk_impl_triple {
             $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE_ONCE: *const u8 = {
+                #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *mut F;
                     $crate::arch::_thunk_asm!(closure_ptr);
@@ -46,6 +47,7 @@ macro_rules! cc_thunk_impl_triple {
             $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE_MUT: *const u8 = {
+                #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F: FnMut($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *mut F;
                     $crate::arch::_thunk_asm!(closure_ptr);
@@ -60,6 +62,7 @@ macro_rules! cc_thunk_impl_triple {
             $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)*) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE: *const u8 = {
+                #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F: Fn($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     let closure_ptr: *const F;
                     $crate::arch::_thunk_asm!(closure_ptr);
@@ -236,6 +239,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
             $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE_ONCE: *const u8 = {
+                #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F, R, $($id_tys),*>($($args: $tys,)* va_args: ...) -> R
                 where
                     F: for<'va> FnOnce($($tys,)* core::ffi::VaListImpl<'va>) -> R
@@ -253,6 +257,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
             $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE_MUT: *const u8 = {
+                #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F, R, $($id_tys),*>($($args: $tys,)* va_args: ...) -> R
                 where
                     F: for<'va> FnMut($($tys,)* core::ffi::VaListImpl<'va>) -> R
@@ -270,6 +275,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
             $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE: *const u8 = {
+                #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F, R, $($id_tys),*>($($args: $tys,)* va_args: ...) -> R
                 where
                     F: for<'va> Fn($($tys,)* core::ffi::VaListImpl<'va>) -> R

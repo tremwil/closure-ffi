@@ -14,10 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `UntypedBareFn*` types that erase the bare function type entirely. Can be used to store
   `BareFn*` wrappers of different types in a data structure.
+- `coverage` unstable feature to support the `-C instrument-coverage` rustc flag.
 
 ### Changed
 - Change thunk assembly magic numbers/sentinel values to sequences that are guaranteed to not be emitted by the compiler.
   Thanks to @Dasaav-dsv for the help.
+- Move most of the arch/feature compile_error checks into the build script for better errors.
 
 ## [v2.4.0] - 2025-06-08
 
