@@ -1,6 +1,6 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(feature = "no_std", no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "unstable", feature(unsize))]
 #![cfg_attr(feature = "unstable", feature(ptr_metadata))]
 #![cfg_attr(feature = "tuple_trait", feature(tuple_trait))]
@@ -8,16 +8,13 @@
 #![cfg_attr(feature = "coverage", feature(coverage_attribute))]
 #![doc = include_str!("../README.md")]
 
-#[cfg(all(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
-compile_error!("only one of bundled_jit_alloc or custom_jit_alloc may be specified");
-
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 extern crate alloc;
 
 // Provide a no_std agnostic `Box` import for other modules
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 pub(crate) use alloc::boxed::Box;
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 pub(crate) use std::boxed::Box;
 
 #[doc(hidden)]

@@ -26,27 +26,28 @@ crate-type = ["lib"]
 test = true
 
 [features]
-default = ["bundled_jit_alloc"]
-no_std = ["dep:spin"]
-bundled_jit_alloc = ["dep:jit-allocator2"]
-custom_jit_alloc = []
+default = ["std", "default_jit_alloc"]
+std = []
+global_jit_alloc = []
+# Spin is needed on no_std, but not std.
+# Sadly there is no way to enable a dependency when a feature is *not* set
+default_jit_alloc = ["global_jit_alloc", "dep:jit-allocator2", "dep:spin"]
 unstable = []
 tuple_trait = ["unstable"]
 c_variadic = ["unstable"]
 coverage = ["unstable"]
 proc_macros = ["dep:closure-ffi-proc-macros"]
-full = ["bundled_jit_alloc", "proc_macros"]
 
 [dependencies]
 closure-ffi-proc-macros = { path = "proc_macros", version = "2.4.0", optional = true }
 jit-allocator2 = {version = "0.2.9", optional = true }
 spin = { version = "0.10", optional = true }
 
-[build-dependencies]
-rustflags = "0.1.7"
-
 [target.'cfg(all(target_arch = "arm", target_os = "linux"))'.dependencies]
 libc = "0.2"
+
+[build-dependencies]
+rustflags = "0.1.7"
 
 [dev-dependencies]
 spin = "0.10"

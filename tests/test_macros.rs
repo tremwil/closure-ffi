@@ -1,5 +1,5 @@
-#![cfg(all(feature = "proc_macros", feature = "bundled_jit_alloc"))]
-#![cfg_attr(feature = "no_std", no_std)]
+#![cfg(all(feature = "proc_macros", feature = "default_jit_alloc"))]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![allow(improper_ctypes_definitions)]
 
 use closure_ffi::{bare_closure::bare_hrtb, BareFn, BareFnMut};

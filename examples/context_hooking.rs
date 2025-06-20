@@ -1,8 +1,8 @@
 //! This example shows how one can design the user-facing interface function hooking library with
 //! excellent type inference and support for capturing closures using `closure-ffi`.
 
-// This example will not compile without the bundled JIT allocator.
-#![cfg(feature = "bundled_jit_alloc")]
+// This example will not compile without the default JIT allocator.
+#![cfg(feature = "default_jit_alloc")]
 #![cfg_attr(feature = "tuple_trait", feature(unboxed_closures))]
 #![cfg_attr(feature = "tuple_trait", feature(tuple_trait))]
 #![cfg_attr(feature = "tuple_trait", feature(fn_traits))]
