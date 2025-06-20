@@ -167,9 +167,10 @@ fn test_unwind_fn() {
     assert!(result.is_err())
 }
 
-#[cfg(not(feature = "no_std"))]
 #[test]
 fn test_untyped_bare_fn() {
+    #[cfg(feature = "no_std")]
+    use alloc::vec::Vec;
     use core::cell::Cell;
 
     // Use this type to verify that our closures were dropped
@@ -194,11 +195,11 @@ fn test_untyped_bare_fn() {
     let int_closure_dropped = Cell::new(false);
     let int_closure_check = SetOnDrop(&int_closure_dropped);
     let int_closure = move |arg: i32| {
-        println!("{int_closure_check:?}"); // Move it into the closure
+        let _ = &int_closure_check;
         shared_ref.set(IntOrStr::Int(arg));
     };
 
-    bare_closures.push(BareFn::new_c(int_closure).into_untyped());
+    bare_closures.push(BareFn::new_c_in(int_closure, &SLAB).into_untyped());
 
     let str_closure_dropped = Cell::new(false);
     let str_closure_check = SetOnDrop(&str_closure_dropped);
@@ -206,7 +207,7 @@ fn test_untyped_bare_fn() {
         println!("{str_closure_check:?}"); // Move it into the closure
         shared_ref.set(IntOrStr::Str(arg));
     };
-    bare_closures.push(BareFn::new_c(str_closure).into_untyped());
+    bare_closures.push(BareFn::new_c_in(str_closure, &SLAB).into_untyped());
 
     unsafe {
         let takes_int: unsafe extern "C" fn(i32) = core::mem::transmute(bare_closures[0].bare());
@@ -226,4 +227,47 @@ fn test_untyped_bare_fn() {
     drop(bare_closures);
     assert!(int_closure_dropped.get());
     assert!(str_closure_dropped.get());
+}
+
+#[test]
+fn test_untyped_upcast() {
+    use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
+
+    use closure_ffi::{traits::Any, BareFnSync};
+
+    // Use this type to verify that our closure was dropped properly
+    #[derive(Debug)]
+    struct SetOnDrop<'a>(&'a AtomicBool);
+    impl Drop for SetOnDrop<'_> {
+        fn drop(&mut self) {
+            self.0.store(true, SeqCst);
+        }
+    }
+
+    let dropped = AtomicBool::new(false);
+    let check = SetOnDrop(&dropped);
+
+    let send_and_sync = BareFnSync::new_c_in(
+        move || {
+            let drop_flag = &check;
+            drop_flag.0.load(SeqCst);
+        },
+        &SLAB,
+    );
+
+    // Upcast from a typed bare fn
+    let untyped_send: UntypedBareFn<dyn Send, _> = send_and_sync.into();
+    assert!(!dropped.load(SeqCst));
+
+    // Upcast from an untyped bare fn
+    let untyped_any: UntypedBareFn<dyn Any, _> = untyped_send.upcast();
+    assert!(!dropped.load(SeqCst));
+
+    unsafe {
+        let bare: unsafe extern "C" fn() -> bool = core::mem::transmute(untyped_any.bare());
+        assert!(!bare());
+    }
+
+    drop(untyped_any);
+    assert!(dropped.load(SeqCst));
 }
