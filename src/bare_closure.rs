@@ -56,7 +56,7 @@ use crate::{
     arch::{create_thunk, ThunkInfo},
     cc,
     jit_alloc::{JitAlloc, JitAllocError},
-    traits::{Any, FnMutThunk, FnOnceThunk, FnPtr, FnThunk, ToBoxedUnsize},
+    traits::{Any, FnMutThunk, FnOnceThunk, FnPtr, FnThunk, ToBoxedDyn},
     Box,
 };
 
@@ -207,7 +207,7 @@ macro_rules! cc_shorthand {
         #[inline]
         pub fn $fn_name<F>(fun: F) -> Self
         where
-            F: ToBoxedUnsize<S>,
+            F: ToBoxedDyn<S>,
             ($cc_ty, F): $trait_ident<B>,
         {
             Self::with_cc(<$cc_ty>::default(), fun)
@@ -226,7 +226,7 @@ macro_rules! cc_shorthand_in {
         #[inline]
         pub fn $fn_name<F>(fun: F, jit_alloc: A) -> Self
         where
-            F: ToBoxedUnsize<S>,
+            F: ToBoxedDyn<S>,
             ($cc_ty, F): $trait_ident<B>,
         {
             Self::with_cc_in(<$cc_ty>::default(), fun, jit_alloc)
@@ -358,9 +358,9 @@ macro_rules! bare_closure_impl {
             ///
             /// For example, a [`UntypedBareFn<dyn Send + Sync>`] may be upcast into a [`UntypedBareFn<dyn Send>`].
             pub fn upcast<U: ?Sized>(self) -> $erased_ty_name<U, A>
-                where PhantomData<S>: ToBoxedUnsize<U>
+                where PhantomData<S>: ToBoxedDyn<U>
             {
-                // SAFETY: This is fine on stable since all trait objects implementing `ToBoxedUnsize`
+                // SAFETY: This is fine on stable since all trait objects implementing `ToBoxedDyn`
                 // only have the destructor in their vtable.
                 //
                 // With the `unstable` feature, it's sketchy as a boxed `dyn Subtrait` can `Unsize` into
@@ -372,7 +372,7 @@ macro_rules! bare_closure_impl {
         }
 
         impl<B: FnPtr, S: ?Sized, U: ?Sized, A: JitAlloc> From<$ty_name<B, S, A>> for $erased_ty_name<U, A>
-            where PhantomData<S>: ToBoxedUnsize<U>
+            where PhantomData<S>: ToBoxedDyn<U>
         {
             fn from(value: $ty_name<B, S, A>) -> Self {
                 value.into_untyped().upcast()
@@ -481,7 +481,7 @@ macro_rules! bare_closure_impl {
             #[inline]
             pub fn new<F>(fun: F) -> Self
             where
-                F: ToBoxedUnsize<S>,
+                F: ToBoxedDyn<S>,
                 (B::CC, F): $trait_ident<B>,
             {
                 Self::new_in(fun, Default::default())
@@ -493,7 +493,7 @@ macro_rules! bare_closure_impl {
             #[inline]
             pub fn with_cc<CC, F>(cconv: CC, fun: F) -> Self
             where
-                F: ToBoxedUnsize<S>,
+                F: ToBoxedDyn<S>,
                 (CC, F): $trait_ident<B>,
             {
                 Self::with_cc_in(cconv, fun, Default::default())
@@ -546,9 +546,9 @@ macro_rules! bare_closure_impl {
             ///
             /// For example, a [`BareFnAny<B, dyn Send + Sync>`] may be upcast into a [`BareFnAny<B, dyn Send>`].
             pub fn upcast<U: ?Sized>(self) -> $ty_name<B, U, A>
-                where PhantomData<S>: ToBoxedUnsize<U>,
+                where PhantomData<S>: ToBoxedDyn<U>,
             {
-                // SAFETY: This is fine on stable since all trait objects implementing `ToBoxedUnsize`
+                // SAFETY: This is fine on stable since all trait objects implementing `ToBoxedDyn`
                 // only have the destructor in their vtable.
                 //
                 // With the `unstable` feature, it's sketchy as a boxed `dyn Subtrait` can `Unsize` into
@@ -568,7 +568,7 @@ macro_rules! bare_closure_impl {
                 jit_alloc: A,
             ) -> Result<Self, JitAllocError>
             where
-                F: ToBoxedUnsize<S>,
+                F: ToBoxedDyn<S>,
                 (CC, F): $trait_ident<B>,
             {
                 let storage = Box::into_raw(F::to_boxed_unsize(fun));
@@ -601,7 +601,7 @@ macro_rules! bare_closure_impl {
             #[inline]
             pub fn with_cc_in<CC, F>(cconv: CC, fun: F, jit_alloc: A) -> Self
             where
-                F: ToBoxedUnsize<S>,
+                F: ToBoxedDyn<S>,
                 (CC, F): $trait_ident<B>,
             {
                 Self::try_with_cc_in(cconv, fun, jit_alloc).unwrap()
@@ -624,7 +624,7 @@ macro_rules! bare_closure_impl {
             #[inline]
             pub fn new_in<F>(fun: F, jit_alloc: A) -> Self
             where
-                F: ToBoxedUnsize<S>,
+                F: ToBoxedDyn<S>,
                 (B::CC, F): $trait_ident<B>,
             {
                 Self::with_cc_in(B::CC::default(), fun, jit_alloc)

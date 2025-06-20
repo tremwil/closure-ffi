@@ -10,7 +10,7 @@
 use core::marker::PhantomData;
 
 use closure_ffi::{
-    traits::{FnPtr, FnThunk, ToBoxedUnsize},
+    traits::{FnPtr, FnThunk, ToBoxedDyn},
     BareFnAny,
 };
 
@@ -143,7 +143,7 @@ impl<'a, B: FnPtr> Hook<'a, B> {
     /// Create a hook that will invoke `fun` when the original function is called.
     pub fn new<F>(fun: F) -> Self
     where
-        F: ToBoxedUnsize<dyn Send + Sync + 'a>,
+        F: ToBoxedDyn<dyn Send + Sync + 'a>,
         (B::CC, F): FnThunk<B>,
     {
         Self {
@@ -155,7 +155,7 @@ impl<'a, B: FnPtr> Hook<'a, B> {
     /// based on the provided closure.
     pub fn with_cc<CC, F>(cc: CC, fun: F) -> Self
     where
-        F: ToBoxedUnsize<dyn Send + Sync + 'a>,
+        F: ToBoxedDyn<dyn Send + Sync + 'a>,
         (CC, F): FnThunk<B>,
     {
         Self {
@@ -169,7 +169,7 @@ impl<'a, B: FnPtr> Hook<'a, B> {
     /// object to capture.
     pub fn with_ctx<F>(ctx_binder: impl FnOnce(HookCtx<'a, B>) -> F) -> Self
     where
-        F: ToBoxedUnsize<dyn Send + Sync + 'a>,
+        F: ToBoxedDyn<dyn Send + Sync + 'a>,
         (B::CC, F): FnThunk<B>,
     {
         let ctx = Self::make_context();
@@ -188,7 +188,7 @@ impl<'a, B: FnPtr> Hook<'a, B> {
     /// object to capture.
     pub fn with_cc_ctx<CC, F>(cc: CC, ctx_binder: impl FnOnce(HookCtx<'a, B>) -> F) -> Self
     where
-        F: ToBoxedUnsize<dyn Send + Sync + 'a>,
+        F: ToBoxedDyn<dyn Send + Sync + 'a>,
         (CC, F): FnThunk<B>,
     {
         let ctx = Self::make_context();
