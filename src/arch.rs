@@ -80,8 +80,8 @@ macro_rules! _thunk_asm {
             "jmp *{jmp_addr}",
             ".balign 8, 0xCC",
             "1:",
-            ".8byte cl_magic_0",
-            ".8byte cl_magic_1",
+            ".8byte {cl_magic_0}",
+            ".8byte {cl_magic_1}",
             cl_magic_0 = const { $crate::arch::magic::CLOSURE_ADDR_MAGIC[0] },
             cl_magic_1 = const { $crate::arch::magic::CLOSURE_ADDR_MAGIC[1] },
             cl_addr = out(reg) $closure_ptr,
@@ -106,7 +106,7 @@ macro_rules! _thunk_asm {
             ".8byte {cl_magic}",
             "2:",
             ".8byte 0",
-            cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
+            cl_magic = const { $crate::arch::magic::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
             jmp_addr = out(reg) _,
             options(nostack)
@@ -129,7 +129,7 @@ macro_rules! _thunk_asm {
             ".4byte {cl_magic}",
             "2:",
             ".4byte 0",
-            cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
+            cl_magic = const { $crate::arch::magic::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
             jmp_addr = out(reg) _,
             options(nostack)
@@ -151,7 +151,7 @@ macro_rules! _thunk_asm {
             ".4byte {cl_magic}",
             "2:",
             ".4byte 0",
-            cl_magic = const { $crate::arch::CLOSURE_ADDR_MAGIC },
+            cl_magic = const { $crate::arch::magic::CLOSURE_ADDR_MAGIC },
             cl_addr = out(reg) $closure_ptr,
             jmp_addr = out(reg) _,
             options(nostack)
