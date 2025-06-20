@@ -44,7 +44,7 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi"
-version = "2.4.0"
+version = "3.0.0"
 dependencies = [
  "clear-cache",
  "closure-ffi-proc-macros",
@@ -57,7 +57,7 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi-proc-macros"
-version = "2.4.0"
+version = "3.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
