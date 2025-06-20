@@ -340,6 +340,9 @@ macro_rules! bare_closure_impl {
                 ManuallyDrop::new(self).thunk_info.thunk
             }
 
+            /// Weaken the bounds of the type-erased storage.
+            ///
+            /// For example, a [`UntypedBareFn<dyn Send + Sync>`] may be upcast into a [`UntypedBareFn<dyn Send>`].
             pub fn upcast<U: ?Sized>(self) -> $erased_ty_name<U, A>
                 where PhantomData<S>: ToBoxedUnsize<U>
             {
@@ -523,6 +526,22 @@ macro_rules! bare_closure_impl {
             /// However, they now return untyped pointers.
             pub fn into_untyped(self) -> $erased_ty_name<S, A> {
                 self.untyped
+            }
+
+            /// Weaken the bounds of the type-erased storage.
+            ///
+            /// For example, a [`BareFnAny<B, dyn Send + Sync>`] may be upcast into a [`BareFnAny<B, dyn Send>`].
+            pub fn upcast<U: ?Sized>(self) -> $ty_name<B, U, A>
+                where PhantomData<S>: ToBoxedUnsize<U>,
+            {
+                // SAFETY: This is fine on stable since all trait objects implementing `ToBoxedUnsize`
+                // only have the destructor in their vtable.
+                //
+                // With the `unstable` feature, it's sketchy as a boxed `dyn Subtrait` can `Unsize` into
+                // a `dyn Supertrait` when `Subtrait: Supertrait`. However, the undocumented layout of
+                // trait object vtables makes the destructor the first entry, so it's fine for now
+                // (and the foreseeable future).
+                unsafe { core::mem::transmute_copy(&ManuallyDrop::new(self)) }
             }
 
             /// Wraps `fun`, producing a bare function with calling convention `cconv`.

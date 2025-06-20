@@ -229,10 +229,10 @@ fn test_untyped_bare_fn() {
 }
 
 #[test]
-fn test_untyped_upcast() {
+fn test_upcast() {
     use core::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
-    use closure_ffi::{traits::Any, BareFnSync};
+    use closure_ffi::{traits::Any, BareFnAny, BareFnSync};
 
     // Use this type to verify that our closure was dropped properly
     #[derive(Debug)]
@@ -254,12 +254,12 @@ fn test_untyped_upcast() {
         &SLAB,
     );
 
-    // Upcast from a typed bare fn
-    let untyped_send: UntypedBareFn<dyn Send, _> = send_and_sync.into();
+    // Upcast into another typed bare fn
+    let typed_send: BareFnAny<_, dyn Send, _> = send_and_sync.upcast();
     assert!(!dropped.load(SeqCst));
 
-    // Upcast from an untyped bare fn
-    let untyped_any: UntypedBareFn<dyn Any, _> = untyped_send.upcast();
+    // Upcast and type erase simultaneously through `into`
+    let untyped_any: UntypedBareFn<dyn Any, _> = typed_send.into();
     assert!(!dropped.load(SeqCst));
 
     unsafe {
