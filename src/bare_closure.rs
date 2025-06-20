@@ -60,6 +60,24 @@ use crate::{
     Box,
 };
 
+#[cfg(not(feature = "coverage"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! bare_hrtb_inner {
+    ($($tokens:tt)*) => {
+        $crate::bare_closure::bare_hrtb_impl! { $crate, $($tokens)* }
+    };
+}
+
+#[cfg(feature = "coverage")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! bare_hrtb_inner {
+    ($($tokens:tt)*) => {
+        $crate::bare_closure::bare_hrtb_impl! { #[coverage(off)] $crate, $($tokens)* }
+    };
+}
+
 /// Declares a wrapper type around a higher-ranked bare function which can be used with [BareFn] and
 /// friends.
 ///
@@ -146,7 +164,7 @@ use crate::{
 #[macro_export]
 macro_rules! bare_hrtb {
     ($($tokens:tt)*) => {
-        $crate::bare_closure::bare_hrtb_impl! { $crate, $($tokens)* }
+        $crate::bare_hrtb_inner! { $($tokens)* }
     };
 }
 
