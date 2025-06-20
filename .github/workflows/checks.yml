@@ -21,15 +21,15 @@ jobs:
       fail-fast: false
       matrix:
         features:
-          - --no-default-features
-          - --no-default-features -F no_std
-          - --no-default-features -F custom_jit_alloc,no_std
-          - -F full
-          - -F full,no_std
-          - -F full,tuple_trait,c_variadic
+          - --no-default-features -F spin
+          - --no-default-features -F spin,global_jit_alloc
+          - --no-default-features -F std,global_jit_alloc
+          - ""
+          - -F proc_macros
+          - -F tuple_trait,c_variadic,coverage
         include:
           - setup: ""
-          - features: -F full,tuple_trait,c_variadic
+          - features: -F tuple_trait,c_variadic,coverage
             setup: |
               rustup toolchain install nightly
               rustup default nightly
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: RUSTFLAGS="--cfg docsrs" cargo +nightly doc -F full
+      - run: RUSTFLAGS="--cfg docsrs" cargo +nightly doc -F proc_macros
 
   build_and_test:
     name: Build and test
@@ -68,15 +68,15 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-latest
         features:
-          - "-F full"
-          - "-F tuple_trait,c_variadic"
-          - "--no-default-features -F custom_jit_alloc"
+          - "-F proc_macros"
+          - "-F tuple_trait,c_variadic,coverage"
+          - "--no-default-features -F spin,global_jit_alloc"
         profile:
           - dev
           - release
         include:
           - nightly: ''
-          - features: "-F tuple_trait,c_variadic"
+          - features: "-F tuple_trait,c_variadic,coverage"
             nightly: +nightly
     
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
