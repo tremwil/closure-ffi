@@ -10,17 +10,15 @@ scenarios, e.g. function hooking for game modding/hacking.
 The crate comes with the following feature flags:
 
 ## Stable
-- `no_std`: Makes the crate compatible with `#![no_std]`. A dependency on `alloc` and `spin` is
-  still required.
-- `bundled_jit_alloc`: Provides a global JIT allocator through the [`jit-allocator2`](https://crates.io/crates/jit-allocator2)
-  crate. This is enabled by default.
-- `custom_jit_alloc`: Allows providing a global JIT allocator through the `global_jit_alloc!` macro.
-  **This is incompatible with `bundled_jit_alloc`**.
+- `std` (default): Use `std` features. When this is turned off, the crate is compatible with `no_std`,
+  although a global allocator must be defined.
+- `global_jit_alloc` (default): Provides the `GlobalJitAlloc` ZST which defers to a global JIT allocator implementation
+  provided either through `default_jit_alloc` feature or the `global_jit_alloc!` macro.
+- `default_jit_alloc` (default): Provides a global JIT allocator implementation through the 
+  [`jit-allocator2`](https://crates.io/crates/jit-allocator2) crate. Note that said crate relies on operating system APIs,
+  so while some `no_std` configurations are supported, bare metal ones will not be able to use this feature. 
 - `proc_macros`: Provides the `bare_hrtb` proc macro which is necessary for creating bare
-  functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>`
-  statements), as well as the `bare_dyn` proc macro for writing `BareFn*` types of boxed 
-  closures (i.e. `Box<dyn Fn()>`) more concisely. 
-- `full`: Enables `bundled_jit_alloc` and `proc_macros` features.
+  functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>` statements).
 
 ## Unstable (require a nightly compiler)
 - `unstable`: Enable the use of unstable Rust features for aspects of the crate that benefit from 
