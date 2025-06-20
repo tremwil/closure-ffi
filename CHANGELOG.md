@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v3.0.0] - 2025-06-20
 
 ### Breaking Changes
-- `ToBoxedUnsize` is now an unsafe trait.
+- `ToBoxedUnsize` has been renamed to `ToBoxedDyn` is now an unsafe trait. See the documentation for the
+  new invariants.
 - `Send` and `Sync` impl bounds on `BareFn` are now stricter to catch more unsafety.
 - Major overhaul of feature flags. See README to view the changes.
 

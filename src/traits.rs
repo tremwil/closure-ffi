@@ -9,7 +9,8 @@ use crate::Box;
 pub trait Any {}
 impl<T: ?Sized> Any for T {}
 
-/// Trait to construct a [`Box<T>`] from a type implementing [`Unsize<T>`](core::marker::Unsize).
+/// Trait to construct a [`Box<dyn Trait>`] from a type implementing
+/// [`Unsize<dyn Trait>`](core::marker::Unsize).
 ///
 /// Since [`Unsize<T>`](core::marker::Unsize) is gated behind the `unsize` nightly feature,
 /// on stable Rust this trait is only implemented for:
@@ -25,34 +26,34 @@ impl<T: ?Sized> Any for T {}
 ///   marker traits (e.g. [`Send`] and [`Sync`]).
 /// - Given the same `T` as above, implementers must also implement `Trait`, `Markers` and outlive
 ///   `'a`.
-pub unsafe trait ToBoxedUnsize<T: ?Sized> {
+pub unsafe trait ToBoxedDyn<T: ?Sized> {
     /// Constructs a [`Box<T>`] from `Self`, coercing into the unsized type.
     fn to_boxed_unsize(value: Self) -> Box<T>;
 }
 
 #[cfg(not(feature = "unstable"))]
-unsafe impl<'a, T: 'a> ToBoxedUnsize<dyn Any + 'a> for T {
+unsafe impl<'a, T: 'a> ToBoxedDyn<dyn Any + 'a> for T {
     fn to_boxed_unsize(value: Self) -> Box<dyn Any + 'a> {
         Box::new(value)
     }
 }
 
 #[cfg(not(feature = "unstable"))]
-unsafe impl<'a, T: Send + 'a> ToBoxedUnsize<dyn Send + 'a> for T {
+unsafe impl<'a, T: Send + 'a> ToBoxedDyn<dyn Send + 'a> for T {
     fn to_boxed_unsize(value: Self) -> Box<dyn Send + 'a> {
         Box::new(value)
     }
 }
 
 #[cfg(not(feature = "unstable"))]
-unsafe impl<'a, T: Sync + 'a> ToBoxedUnsize<dyn Sync + 'a> for T {
+unsafe impl<'a, T: Sync + 'a> ToBoxedDyn<dyn Sync + 'a> for T {
     fn to_boxed_unsize(value: Self) -> Box<dyn Sync + 'a> {
         Box::new(value)
     }
 }
 
 #[cfg(not(feature = "unstable"))]
-unsafe impl<'a, T: Send + Sync + 'a> ToBoxedUnsize<dyn Send + Sync + 'a> for T {
+unsafe impl<'a, T: Send + Sync + 'a> ToBoxedDyn<dyn Send + Sync + 'a> for T {
     fn to_boxed_unsize(value: Self) -> Box<dyn Send + Sync + 'a> {
         Box::new(value)
     }
@@ -62,7 +63,7 @@ unsafe impl<'a, T: Send + Sync + 'a> ToBoxedUnsize<dyn Send + Sync + 'a> for T {
 // SAFETY:
 // - we restrict T to be a `dyn Trait`, not just any DST,
 // - the `Unsize` impl guarantees implementation of `T` by `U`
-unsafe impl<T: ?Sized, U: core::marker::Unsize<T>> ToBoxedUnsize<T> for U
+unsafe impl<T: ?Sized, U: core::marker::Unsize<T>> ToBoxedDyn<T> for U
 where
     T: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<T>>,
 {
