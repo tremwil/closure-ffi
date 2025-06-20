@@ -1,4 +1,4 @@
-#![cfg(feature = "bundled_jit_alloc")]
+#![cfg(feature = "default_jit_alloc")]
 
 #[allow(unused_imports)]
 use closure_ffi::{traits::FnPtr, BareFn, BareFnMut, BareFnOnce};
@@ -95,7 +95,7 @@ fn test_moved_fn_mut() {
 
 // This used to segfault on A32/T32 targets:
 // https://github.com/tremwil/closure-ffi/issues/3
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 #[test]
 fn test_print_fn() {
     let bare_closure = BareFn::new_c(move |n: usize| {
@@ -109,7 +109,7 @@ fn test_print_fn() {
 
 // This used to segfault on A32/T32 targets:
 // https://github.com/tremwil/closure-ffi/issues/3
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 #[test]
 fn test_print_fn_once() {
     let bare_closure = BareFnOnce::new_c(move |n: usize| {

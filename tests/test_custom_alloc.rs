@@ -1,14 +1,14 @@
-#![cfg(feature = "custom_jit_alloc")]
+#![cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")))]
 
 mod slab_alloc;
 
 use closure_ffi::{global_jit_alloc, BareFn, BareFnMut};
 use slab_alloc::SlabAlloc;
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 static SLAB: std::sync::LazyLock<SlabAlloc> = std::sync::LazyLock::new(|| SlabAlloc::new(0x10000));
 
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 static SLAB: spin::Lazy<SlabAlloc> = spin::Lazy::new(|| SlabAlloc::new(0x10000));
 
 global_jit_alloc!(SLAB);
@@ -64,7 +64,7 @@ fn test_moved_fn_mut() {
 
 // This used to segfault on A32/T32 targets:
 // https://github.com/tremwil/closure-ffi/issues/3
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 #[test]
 fn test_print_fn() {
     let bare_closure = BareFn::new_c(move |n: usize| {
@@ -78,7 +78,7 @@ fn test_print_fn() {
 
 // This used to segfault on A32/T32 targets:
 // https://github.com/tremwil/closure-ffi/issues/3
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 #[test]
 fn test_print_fn_once() {
     use closure_ffi::BareFnOnce;
