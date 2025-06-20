@@ -19,27 +19,21 @@
 //! it is not allowed:
 //!
 //! ```compile_fail
-//! #[cfg(all(feature = "bundled_jit_alloc", not(feature = "no_std")))]
-//! {
-//!     use closure_ffi::BareFn;
-//!     use std::{cell::Cell, thread};
-//!
-//!     let cell = Cell::new(0);
-//!
-//!     // WARNING: `wrapped` is Sync, but not the closure!
-//!     let wrapped = BareFn::new_c(move || -> u32 {
-//!         let val = cell.get();
-//!         cell.set(val + 1);
-//!         val
-//!     });
-//!
-//!     // `wrapped` can be borrowed here at is it Sync. But by `bare()` documentation,
-//!     // calling the function is unsound as the closure is not Sync!
-//!     thread::scope(|s| {
-//!         s.spawn(|| unsafe { wrapped.bare()() });
-//!         s.spawn(|| unsafe { wrapped.bare()() });
-//!     });
-//! }
+//! use closure_ffi::BareFn;
+//! use std::{cell::Cell, thread};
+//! let cell = Cell::new(0);
+//! // WARNING: `wrapped` is Sync, but not the closure!
+//! let wrapped = BareFn::new_c(move || -> u32 {
+//!     let val = cell.get();
+//!     cell.set(val + 1);
+//!     val
+//! });
+//! // `wrapped` can be borrowed here at is it Sync. But by `bare()` documentation,
+//! // calling the function is unsound as the closure is not Sync!
+//! thread::scope(|s| {
+//!     s.spawn(|| unsafe { wrapped.bare()() });
+//!     s.spawn(|| unsafe { wrapped.bare()() });
+//! });
 //! ```
 //!
 //! To help guard against this, [`Sync`] is only implemented:
@@ -49,7 +43,7 @@
 //!   against unsynchronized calls.
 //! - for [`BareFnAny`]: When the closure is [`Sync`].
 
-use core::marker::PhantomData;
+use core::{marker::PhantomData, mem::ManuallyDrop};
 
 #[cfg(feature = "proc_macros")]
 #[doc(hidden)]
@@ -315,13 +309,28 @@ macro_rules! bare_closure_impl {
             where
                 Self: 'static,
             {
-                core::mem::ManuallyDrop::new(self).thunk_info.thunk
+                ManuallyDrop::new(self).thunk_info.thunk
+            }
+
+            pub fn upcast<U: ?Sized>(self) -> $erased_ty_name<U, A>
+                where PhantomData<S>: ToBoxedUnsize<U>
+            {
+                // SAFETY: This is fine on stable since all trait objects implementing `ToBoxedUnsize`
+                // only have the destructor in their vtable.
+                //
+                // With the `unstable` feature, it's sketchy as a boxed `dyn Subtrait` can `Unsize` into
+                // a `dyn Supertrait` when `Subtrait: Supertrait`. However, the undocumented layout of
+                // trait object vtables makes the destructor the first entry, so it's fine for now
+                // (and the foreseeable future).
+                unsafe { core::mem::transmute_copy(&ManuallyDrop::new(self)) }
             }
         }
 
-        impl<B: FnPtr, S: ?Sized, A: JitAlloc> From<$ty_name<B, S, A>> for $erased_ty_name<S, A> {
+        impl<B: FnPtr, S: ?Sized, U: ?Sized, A: JitAlloc> From<$ty_name<B, S, A>> for $erased_ty_name<U, A>
+            where PhantomData<S>: ToBoxedUnsize<U>
+        {
             fn from(value: $ty_name<B, S, A>) -> Self {
-                value.into_untyped()
+                value.into_untyped().upcast()
             }
         }
 
