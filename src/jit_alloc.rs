@@ -82,7 +82,7 @@ impl<J: JitAlloc> JitAlloc for &J {
     }
 }
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 impl<J: JitAlloc> JitAlloc for std::sync::LazyLock<J> {
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
         self.deref().alloc(size)
@@ -101,7 +101,7 @@ impl<J: JitAlloc> JitAlloc for std::sync::LazyLock<J> {
     }
 }
 
-#[cfg(feature = "no_std")]
+#[cfg(feature = "global_jit_alloc")]
 impl<J: JitAlloc, R: spin::RelaxStrategy> JitAlloc for spin::lazy::Lazy<J, fn() -> J, R> {
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
         self.deref().alloc(size)
@@ -120,20 +120,20 @@ impl<J: JitAlloc, R: spin::RelaxStrategy> JitAlloc for spin::lazy::Lazy<J, fn() 
     }
 }
 
-#[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+#[cfg(feature = "global_jit_alloc")]
 /// The default, global JIT allocator.
 ///
-/// When the `bundled_jit_alloc` feature is enabled, this is currently implemented as a ZST
+/// When the `default_jit_alloc` feature is enabled, this is currently implemented as a ZST
 /// deffering to a static [`jit_allocator2::JitAllocator`] behind a [`std::sync::Mutex`] (or a
-/// [`spin::Mutex`](https://docs.rs/spin/0.9/spin/type.Mutex.html) under `no_std`).
+/// [`spin::Mutex`] under `no_std`).
 ///
-/// When the `custom_jit_alloc` feature is enabled, defers to a [`JitAlloc`] implementation
+/// When the `default_jit_alloc` feature is not enabled, defers to a [`JitAlloc`] implementation
 /// provided by a downstream crate using the [`global_jit_alloc`] macro.
 #[derive(Default, Clone, Copy)]
 pub struct GlobalJitAlloc;
 
-#[cfg(feature = "bundled_jit_alloc")]
-mod bundled_jit_alloc {
+#[cfg(feature = "default_jit_alloc")]
+mod default_jit_alloc {
     use jit_allocator2::JitAllocator;
 
     use super::*;
@@ -162,58 +162,8 @@ mod bundled_jit_alloc {
         jit_allocator2::flush_instruction_cache(rx_ptr, size);
     }
 
-    impl JitAlloc for core::cell::RefCell<JitAllocator> {
-        fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-            self.borrow_mut().alloc(size).map_err(|_| JitAllocError)
-        }
-
-        unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-            self.borrow_mut().release(rx_ptr).map_err(|_| JitAllocError)
-        }
-
-        #[inline(always)]
-        unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-            flush_instruction_cache(rx_ptr, size);
-        }
-
-        #[inline(always)]
-        unsafe fn protect_jit_memory(
-            &self,
-            _ptr: *const u8,
-            _size: usize,
-            access: ProtectJitAccess,
-        ) {
-            jit_allocator2::protect_jit_memory(convert_access(access));
-        }
-    }
-
-    #[cfg(not(feature = "no_std"))]
-    impl JitAlloc for std::sync::RwLock<JitAllocator> {
-        fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-            self.write().unwrap().alloc(size).map_err(|_| JitAllocError)
-        }
-
-        unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-            self.write().unwrap().release(rx_ptr).map_err(|_| JitAllocError)
-        }
-
-        #[inline(always)]
-        unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-            flush_instruction_cache(rx_ptr, size);
-        }
-
-        #[inline(always)]
-        unsafe fn protect_jit_memory(
-            &self,
-            _ptr: *const u8,
-            _size: usize,
-            access: ProtectJitAccess,
-        ) {
-            jit_allocator2::protect_jit_memory(convert_access(access));
-        }
-    }
-
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
+    #[doc(hidden)]
     impl JitAlloc for std::sync::Mutex<JitAllocator> {
         fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
             self.lock().unwrap().alloc(size).map_err(|_| JitAllocError)
@@ -239,18 +189,18 @@ mod bundled_jit_alloc {
         }
     }
 
-    #[cfg(feature = "no_std")]
+    #[cfg(not(feature = "std"))]
     static GLOBAL_JIT_ALLOC: spin::Mutex<Option<alloc::boxed::Box<JitAllocator>>> =
         spin::Mutex::new(None);
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     static GLOBAL_JIT_ALLOC: std::sync::Mutex<Option<Box<JitAllocator>>> =
         std::sync::Mutex::new(None);
 
     impl super::GlobalJitAlloc {
         fn use_alloc<T>(&self, action: impl FnOnce(&mut JitAllocator) -> T) -> T {
-            #[cfg(feature = "no_std")]
+            #[cfg(not(feature = "std"))]
             let mut maybe_alloc = GLOBAL_JIT_ALLOC.lock();
-            #[cfg(not(feature = "no_std"))]
+            #[cfg(feature = "std")]
             let mut maybe_alloc = GLOBAL_JIT_ALLOC.lock().unwrap();
 
             let alloc = maybe_alloc.get_or_insert_with(|| JitAllocator::new(Default::default()));
@@ -258,6 +208,7 @@ mod bundled_jit_alloc {
         }
     }
 
+    #[cfg_attr(docsrs, doc(cfg(feature = "global_jit_alloc")))]
     impl JitAlloc for super::GlobalJitAlloc {
         fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
             self.use_alloc(|a| a.alloc(size)).map_err(|_| JitAllocError)
@@ -283,7 +234,7 @@ mod bundled_jit_alloc {
         }
     }
 
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     pub(super) mod thread_jit_alloc {
         use core::{cell::UnsafeCell, marker::PhantomData};
 
@@ -333,9 +284,9 @@ mod bundled_jit_alloc {
         }
     }
 }
-#[cfg(all(feature = "bundled_jit_alloc", not(feature = "no_std")))]
+#[cfg(all(feature = "default_jit_alloc", feature = "std"))]
 #[doc(inline)]
-pub use bundled_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
+pub use default_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
 
 /// Defines a global [`JitAlloc`] implementation which [`GlobalJitAlloc`] will defer to.
 ///
@@ -359,38 +310,50 @@ pub use bundled_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
 /// The block form must be marked with `unsafe` as sometimes returning a different impl can lead to
 /// UB, and you are responsible to make sure this doesn't happen.
 #[macro_export]
-#[cfg(any(docsrs, feature = "custom_jit_alloc"))]
-#[cfg_attr(docsrs, doc(cfg(feature = "custom_jit_alloc")))]
+#[cfg(any(
+    docsrs,
+    all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")),
+))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc"))))
+)]
 macro_rules! global_jit_alloc {
     ($static_var:path) => {
         #[no_mangle]
-        extern "Rust" fn _closure_ffi__global_jit_alloc(
+        extern "Rust" fn _closure_ffi_3_global_jit_alloc(
         ) -> &'static (dyn $crate::jit_alloc::JitAlloc + Sync) {
             &$static_var
         }
     };
     (unsafe $provider:block) => {
         #[no_mangle]
-        extern "Rust" fn _closure_ffi__global_jit_alloc(
+        extern "Rust" fn _closure_ffi_3_global_jit_alloc(
         ) -> &'static (dyn $crate::jit_alloc::JitAlloc + Sync) {
             unsafe { $provider }
         }
     };
 }
-#[cfg(any(docsrs, feature = "custom_jit_alloc"))]
-#[cfg_attr(docsrs, doc(cfg(feature = "custom_jit_alloc")))]
+#[cfg(any(
+    docsrs,
+    all(feature = "global_jit_alloc", not(feature = "default_jit_alloc"))
+))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc"))))
+)]
 pub use global_jit_alloc;
 
-#[cfg(feature = "custom_jit_alloc")]
+#[cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")))]
 mod custom_jit_alloc {
     use super::{GlobalJitAlloc, JitAlloc, JitAllocError, ProtectJitAccess};
 
     extern "Rust" {
-        fn _closure_ffi__global_jit_alloc() -> &'static (dyn JitAlloc + Sync);
+        fn _closure_ffi_3_global_jit_alloc() -> &'static (dyn JitAlloc + Sync);
     }
 
     fn get_global_jit_alloc() -> &'static dyn JitAlloc {
-        unsafe { _closure_ffi__global_jit_alloc() }
+        unsafe { _closure_ffi_3_global_jit_alloc() }
     }
 
     impl JitAlloc for GlobalJitAlloc {

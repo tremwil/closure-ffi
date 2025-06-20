@@ -49,7 +49,7 @@ use core::{marker::PhantomData, mem::ManuallyDrop};
 #[doc(hidden)]
 pub use closure_ffi_proc_macros::bare_hrtb as bare_hrtb_impl;
 
-#[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+#[cfg(feature = "global_jit_alloc")]
 use crate::jit_alloc::GlobalJitAlloc;
 #[allow(unused_imports)]
 use crate::{
@@ -242,7 +242,7 @@ macro_rules! bare_closure_impl {
         sync_alias_bound_doc: $sync_alias_bound_doc:literal,
         safety_doc: $safety_doc:literal
     ) => {
-        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+        #[cfg(feature = "global_jit_alloc")]
         #[cfg_attr(docsrs, doc(cfg(all())))]
         /// Type-erased wrapper around a
         #[doc = $fn_trait_doc]
@@ -275,7 +275,7 @@ macro_rules! bare_closure_impl {
 
         // We copy the documentation to this type, since IDEs will often fetch it from here for
         // pop-up documentation if neither feature is on
-        #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
+        #[cfg(not(feature = "global_jit_alloc"))]
         /// Type-erased wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a pointer to a bare function thunk.
@@ -383,7 +383,7 @@ macro_rules! bare_closure_impl {
             }
         }
 
-        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+        #[cfg(feature = "global_jit_alloc")]
         #[cfg_attr(docsrs, doc(cfg(all())))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
@@ -420,7 +420,7 @@ macro_rules! bare_closure_impl {
 
         // We copy the documentation to this type, since IDEs will often fetch it from here for
         // pop-up documentation of neither feature is on
-        #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
+        #[cfg(not(feature = "global_jit_alloc"))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
@@ -453,7 +453,7 @@ macro_rules! bare_closure_impl {
         }
 
         // Split the impl blocks so that the relevant functions appear first in docs
-        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+        #[cfg(feature = "global_jit_alloc")]
         impl<B: FnPtr, S: ?Sized> $ty_name<B, S, GlobalJitAlloc> {
             /// Wraps `fun`, producing a bare function of signature `B`.
             ///
@@ -617,7 +617,7 @@ macro_rules! bare_closure_impl {
             }
         }
 
-        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+        #[cfg(feature = "global_jit_alloc")]
         impl<B: FnPtr, S: ?Sized> $ty_name<B, S, GlobalJitAlloc> {
             cc_shorthand!(new_c, $trait_ident, cc::C, "C");
 
@@ -758,7 +758,7 @@ macro_rules! bare_closure_impl {
             );
         }
 
-        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+        #[cfg(feature = "global_jit_alloc")]
         #[cfg_attr(docsrs, doc(cfg(all())))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
@@ -770,7 +770,7 @@ macro_rules! bare_closure_impl {
         /// type.
         pub type $non_sync_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, dyn Any + 'a, A>;
 
-        #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
+        #[cfg(not(feature = "global_jit_alloc"))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without
@@ -781,7 +781,7 @@ macro_rules! bare_closure_impl {
         /// type.
         pub type $non_sync_alias<'a, B, A> = $ty_name<B, dyn Any + 'a, A>;
 
-        #[cfg(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc"))]
+        #[cfg(feature = "global_jit_alloc")]
         #[cfg_attr(docsrs, doc(cfg(all())))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
@@ -798,7 +798,7 @@ macro_rules! bare_closure_impl {
         /// type.
         pub type $sync_alias<'a, B, A = GlobalJitAlloc> = $ty_name<B, $sync_alias_bound, A>;
 
-        #[cfg(not(any(feature = "bundled_jit_alloc", feature = "custom_jit_alloc")))]
+        #[cfg(not(feature = "global_jit_alloc"))]
         /// Wrapper around a
         #[doc = $fn_trait_doc]
         /// closure which exposes a bare function thunk that can invoke it without

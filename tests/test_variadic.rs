@@ -1,4 +1,4 @@
-#![cfg(all(feature = "bundled_jit_alloc", feature = "c_variadic"))]
+#![cfg(all(feature = "default_jit_alloc", feature = "c_variadic"))]
 #![feature(c_variadic)]
 
 use std::ffi::{CStr, VaList, VaListImpl};

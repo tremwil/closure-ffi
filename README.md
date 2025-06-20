@@ -45,7 +45,7 @@ unsafe extern "C" fn ffi_unregister_callback(cb: unsafe extern "C" fn(u32)) {
     // ...
 }
 
-#[cfg(feature = "bundled_jit_alloc")]
+#[cfg(feature = "default_jit_alloc")]
 {
     // We want to keep track of sum of callback arguments without using 
     // statics. This is where closure-ffi comes in:
