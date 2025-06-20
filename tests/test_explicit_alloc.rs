@@ -249,7 +249,7 @@ fn test_untyped_upcast() {
     let send_and_sync = BareFnSync::new_c_in(
         move || {
             let drop_flag = &check;
-            drop_flag.0.load(SeqCst);
+            drop_flag.0.load(SeqCst)
         },
         &SLAB,
     );
