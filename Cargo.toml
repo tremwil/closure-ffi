@@ -58,5 +58,5 @@ region = "3.0.2"
 clear-cache = "0.1.1"
 
 [package.metadata.docs.rs]
-features = ["full"]
+features = ["proc_macros"]
 rustdoc-args = ["--cfg", "docsrs"]
