@@ -500,6 +500,15 @@ macro_rules! bare_closure_impl {
             }
         }
 
+        #[cfg(feature = "global_jit_alloc")]
+        impl<'a, B: FnPtr> $ty_name<B, dyn Any + 'a, GlobalJitAlloc> {
+            ///
+            pub fn with_thunk<T>(thunk: T) -> Self where T: $trait_ident<B> + 'a
+            {
+                Self::with_thunk_in(thunk, Default::default())
+            }
+        }
+
         impl<B: FnPtr, S: ?Sized, A: JitAlloc> $ty_name<B, S, A> {
             #[$bare_toggle]
             /// Return a bare function pointer that invokes the underlying closure.
@@ -555,6 +564,20 @@ macro_rules! bare_closure_impl {
                 // a `dyn Supertrait` when `Subtrait: Supertrait`. However, the undocumented layout of
                 // trait object vtables makes the destructor the first entry, so it's fine for now
                 // (and the foreseeable future).
+                unsafe { core::mem::transmute_copy(&ManuallyDrop::new(self)) }
+            }
+
+            /// Strengthen the bounds of the type-erased storage.
+            ///
+            /// For example, a [`BareFnAny<B, dyn Any>`] may be downcast into a [`BareFnAny<B, dyn Send>`].
+            ///
+            /// This is **very unsafe**, but sometimes necessary.
+            ///
+            /// # Safety
+            /// The type-erased closure must implement [`ToBoxedDyn<U>`].
+            pub unsafe fn downcast<U: ?Sized>(self) -> $ty_name<B, U, A>
+                where PhantomData<U>: ToBoxedDyn<S>,
+            {
                 unsafe { core::mem::transmute_copy(&ManuallyDrop::new(self)) }
             }
 
@@ -628,6 +651,37 @@ macro_rules! bare_closure_impl {
                 (B::CC, F): $trait_ident<B>,
             {
                 Self::with_cc_in(B::CC::default(), fun, jit_alloc)
+            }
+        }
+
+        impl<'a, B: FnPtr, A: JitAlloc> $ty_name<B, dyn Any + 'a, A> {
+            pub fn try_with_thunk_in<T>(thunk: T, jit_alloc: A) -> Result<Self, JitAllocError>
+            where T: $trait_ident<B> + 'a
+            {
+                // SAFETY: All implementors of `Fn*Thunk` are #[repr(transparent)] with the closure
+                let storage = Box::into_raw(ToBoxedDyn::<dyn Any + 'a>::to_boxed_unsize(thunk));
+
+                // SAFETY:
+                // - thunk_template pointer obtained from the correct source
+                // - `closure` is a valid pointer to `fun`
+                let thunk_info = unsafe {
+                    create_thunk(T::$thunk_template, storage as *const _, &jit_alloc)?
+                };
+                Ok(Self {
+                    untyped: $erased_ty_name {
+                        thunk_info,
+                        jit_alloc,
+                        storage,
+                    },
+                    phantom: PhantomData,
+                })
+            }
+
+            #[inline]
+            pub fn with_thunk_in<T>(thunk: T, jit_alloc: A) -> Self
+            where T: $trait_ident<B> + 'a
+            {
+                Self::try_with_thunk_in(thunk, jit_alloc).unwrap()
             }
         }
 
