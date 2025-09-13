@@ -3,6 +3,7 @@
 
 mod slab_alloc;
 
+use closure_ffi::traits::{FnMutThunk, FnPtr, FnThunk};
 #[allow(unused_imports)]
 use closure_ffi::{cc, BareFn, BareFnMut, BareFnOnce, UntypedBareFn};
 use slab_alloc::SlabAlloc;
@@ -272,4 +273,41 @@ fn test_upcast() {
 
     drop(untyped_any);
     assert!(dropped.load(SeqCst));
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn test_wrap() {
+    fn lock_and_debug<B: FnPtr, F>(fun: F) -> impl FnThunk<B>
+    where
+        for<'a, 'b, 'c> B::Ret<'a, 'b, 'c>: core::fmt::Debug,
+        (cc::C, F): FnMutThunk<B>,
+    {
+        let locked = std::sync::Mutex::new((cc::C, fun));
+        B::make_thunk(move |args| unsafe {
+            let ret = locked.lock().unwrap().call_mut(args);
+            println!("value: {ret:?}");
+            ret
+        })
+    }
+
+    let mut counter = 0;
+    let locked_inc = BareFn::with_thunk_in(
+        lock_and_debug(|n: usize| {
+            counter += n;
+            counter
+        }),
+        &SLAB,
+    );
+    // Safety: see `lock_and_debug` impl.
+    let locked_inc = unsafe { locked_inc.downcast::<dyn Sync>() };
+
+    std::thread::scope(|s| {
+        for _ in 0..1000 {
+            s.spawn(|| unsafe { locked_inc.bare()(5) });
+        }
+    });
+
+    drop(locked_inc);
+    assert_eq!(counter, 5000);
 }
