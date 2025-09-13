@@ -130,6 +130,44 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
 
     /// Casts `self` to an untyped pointer.
     fn to_ptr(self) -> *const ();
+
+    /// Creates a [`FnOnceThunk`] implementation from a closure taking the same arguments as this
+    /// function pointer.
+    fn make_once_thunk<F>(fun: F) -> impl FnOnceThunk<Self>
+    where
+        F: for<'a, 'b, 'c> PackedFnOnce<'a, 'b, 'c, Self>;
+
+    /// Creates a [`FnMutThunk`] implementation from a closure taking the same arguments as this
+    /// function pointer.
+    fn make_mut_thunk<F>(fun: F) -> impl FnMutThunk<Self>
+    where
+        F: for<'a, 'b, 'c> PackedFnMut<'a, 'b, 'c, Self>;
+
+    /// Creates a [`FnThunk`] implementation from a closure taking the same arguments as this
+    /// function pointer.
+    fn make_thunk<F>(fun: F) -> impl FnThunk<Self>
+    where
+        F: for<'a, 'b, 'c> PackedFn<'a, 'b, 'c, Self>;
+}
+
+pub trait ThunkFactory<B: FnPtr, S: ?Sized> {
+    /// Creates a [`FnOnceThunk`] implementation from a closure with the same signature as `B`,
+    /// except that the arguments are packed in a tuple.
+    fn with_fn_once<F>(&self, fun: F) -> impl FnOnceThunk<B> + ToBoxedDyn<S>
+    where
+        F: ToBoxedDyn<S> + for<'a, 'b, 'c> PackedFnOnce<'a, 'b, 'c, B>;
+
+    /// Creates a [`FnMutThunk`] implementation from a closure with the same signature as `B`,
+    /// except that the arguments are packed in a tuple.
+    fn with_fn_mut<F>(&self, fun: F) -> impl FnMutThunk<B> + ToBoxedDyn<S>
+    where
+        F: for<'a, 'b, 'c> PackedFnMut<'a, 'b, 'c, B>;
+
+    /// Creates a [`FnThunk`] implementation from a closure with the same signature as `B`,
+    /// except that the arguments are packed in a tuple.
+    fn with_fn<F>(&self, fun: F) -> impl FnThunk<B> + ToBoxedDyn<S>
+    where
+        F: ToBoxedDyn<S> + for<'a, 'b, 'c> PackedFn<'a, 'b, 'c, B>;
 }
 
 /// Trait implemented by (`CC`, [`FnOnce`]) tuples used to generate a bare function thunk template,
@@ -154,13 +192,7 @@ pub unsafe trait FnOnceThunk<B: FnPtr>: Sized {
     const THUNK_TEMPLATE_ONCE: *const u8;
 
     /// Calls the closure making up this [`FnOnceThunk`] by value.
-    fn call_once<'a, 'b, 'c>(self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
-
-    /// Wraps by-value calls to the closure making up this [`FnOnceThunk`] around higher-level
-    /// logic.
-    fn wrap_once<W>(self, wrapper: W) -> impl FnOnceThunk<B>
-    where
-        W: for<'a, 'b, 'c> WrapFnOnce<'a, 'b, 'c, Self, B>;
+    unsafe fn call_once<'a, 'b, 'c>(self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
 }
 
 /// Trait implemented by (`CC`, [`FnMut`]) tuples used to generate a bare function thunk template,
@@ -189,13 +221,7 @@ pub unsafe trait FnMutThunk<B: FnPtr>: FnOnceThunk<B> {
     const THUNK_TEMPLATE_MUT: *const u8;
 
     /// Calls the closure making up this [`FnMutThunk`] by mutable reference.
-    fn call_mut<'a, 'b, 'c>(&mut self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
-
-    /// Wraps by-mut calls to the closure making up this [`FnMutThunk`] around higher-level
-    /// logic.
-    fn wrap_mut<W>(self, wrapper: W) -> impl FnMutThunk<B>
-    where
-        W: for<'a, 'b, 'c> WrapFnMut<'a, 'b, 'c, Self, B>;
+    unsafe fn call_mut<'a, 'b, 'c>(&mut self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
 }
 
 /// Trait implemented by (`CC`, [`Fn`]) tuples used to generate a bare function thunk template,
@@ -224,50 +250,41 @@ pub unsafe trait FnThunk<B: FnPtr>: FnMutThunk<B> {
     const THUNK_TEMPLATE: *const u8;
 
     /// Calls the closure making up this [`FnThunk`] by value.
-    fn call<'a, 'b, 'c>(&self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
-
-    /// Wraps by-ref calls to the closure making up this [`FnThunk`] around higher-level
-    /// logic.
-    fn wrap<W>(self, wrapper: W) -> impl FnThunk<B>
-    where
-        W: for<'a, 'b, 'c> WrapFn<'a, 'b, 'c, Self, B>;
+    unsafe fn call<'a, 'b, 'c>(&self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
 }
 
-/// Trait alias for `FnOnce(T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`.
+/// Trait alias for [`FnOnce(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`](FnOnce).
 ///
-/// This is necessary to write the bounds on [`FnOnceThunk::wrap_once`].
-pub trait WrapFnOnce<'a, 'b, 'c, T, B: FnPtr>:
-    FnOnce(T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+/// This is necessary to express the return type of [`FnPtr::make_once_thunk`].
+pub trait PackedFnOnce<'a, 'b, 'c, B: FnPtr>:
+    FnOnce(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
 {
 }
 
-impl<'a, 'b, 'c, T, B: FnPtr, F> WrapFnOnce<'a, 'b, 'c, T, B> for F where
-    F: FnOnce(T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+impl<'a, 'b, 'c, B: FnPtr, F> PackedFnOnce<'a, 'b, 'c, B> for F where
+    F: FnOnce(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
 {
 }
 
-/// Trait alias for `FnMut(&mut T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`
+/// Trait alias for [`FnMut(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`](FnMut).
 ///
-///  This is necessary to write the bounds on [`FnMutThunk::wrap_mut`].
-pub trait WrapFnMut<'a, 'b, 'c, T, B: FnPtr>:
-    FnMut(&mut T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+/// This is necessary to express the return type of [`FnPtr::make_mut_thunk`].
+pub trait PackedFnMut<'a, 'b, 'c, B: FnPtr>:
+    FnMut(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
 {
 }
 
-impl<'a, 'b, 'c, T, B: FnPtr, F> WrapFnMut<'a, 'b, 'c, T, B> for F where
-    F: FnMut(&mut T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+impl<'a, 'b, 'c, B: FnPtr, F> PackedFnMut<'a, 'b, 'c, B> for F where
+    F: FnMut(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
 {
 }
 
-/// Trait alias for `Fn(&mut T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`.
+/// Trait alias for [`Fn(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`](Fn).
 ///
-/// This is necessary to write the bounds on [`FnThunk::wrap`].
-pub trait WrapFn<'a, 'b, 'c, T, B: FnPtr>:
-    Fn(&T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
-{
-}
+/// This is necessary to express the return type of [`FnPtr::make_thunk`].
+pub trait PackedFn<'a, 'b, 'c, B: FnPtr>: Fn(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c> {}
 
-impl<'a, 'b, 'c, T, B: FnPtr, F> WrapFn<'a, 'b, 'c, T, B> for F where
-    F: Fn(&T, B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+impl<'a, 'b, 'c, B: FnPtr, F> PackedFn<'a, 'b, 'c, B> for F where
+    F: Fn(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
 {
 }
