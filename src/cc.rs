@@ -291,7 +291,9 @@ macro_rules! cc_thunk_impl_triple_variadic {
             #[inline(always)]
             unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>
             {
-                panic!("FnPtr::call is not supported on C variadics due to a language limitations")
+                const {
+                    panic!("FnPtr::call is not supported on C variadics due to a language limitations")
+                }
             }
 
             #[inline(always)]
