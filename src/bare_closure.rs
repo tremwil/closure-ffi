@@ -499,6 +499,12 @@ macro_rules! bare_closure_impl {
                 Self::with_cc_in(cconv, fun, Default::default())
             }
 
+            /// Create a
+            #[doc = $ty_name_doc]
+            /// directly from a
+            #[doc = concat!("[`", stringify!($trait_ident), "`].")]
+            ///
+            /// The W^X memory required is allocated using the global JIT allocator.
             pub fn with_thunk<T>(thunk: T) -> Self where T: $trait_ident<B> + ToBoxedDyn<S>
             {
                 Self::with_thunk_in(thunk, Default::default())
@@ -635,6 +641,12 @@ macro_rules! bare_closure_impl {
                 Self::with_cc_in(B::CC::default(), fun, jit_alloc)
             }
 
+            /// Create a
+            #[doc = $ty_name_doc]
+            /// directly from a
+            #[doc = concat!("[`", stringify!($trait_ident), "`].")]
+            ///
+            /// Uses `jit_alloc` to allocate the W^X memory used to create the thunk.
             pub fn try_with_thunk_in<T>(thunk: T, jit_alloc: A) -> Result<Self, JitAllocError>
             where T: $trait_ident<B> + ToBoxedDyn<S>
             {
@@ -657,6 +669,16 @@ macro_rules! bare_closure_impl {
                 })
             }
 
+            /// Create a
+            #[doc = $ty_name_doc]
+            /// directly from a
+            #[doc = concat!("[`", stringify!($trait_ident), "`].")]
+            ///
+            /// Uses `jit_alloc` to allocate the W^X memory used to create the thunk.
+            ///
+            /// # Panics
+            /// If the provided JIT allocator fails to allocate memory. For a non-panicking
+            /// version, see [`Self::try_with_thunk_in`].
             #[inline]
             pub fn with_thunk_in<T>(thunk: T, jit_alloc: A) -> Self
             where T: $trait_ident<B> + ToBoxedDyn<S>
