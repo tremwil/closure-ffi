@@ -150,26 +150,6 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
         F: for<'a, 'b, 'c> PackedFn<'a, 'b, 'c, Self>;
 }
 
-pub trait ThunkFactory<B: FnPtr, S: ?Sized> {
-    /// Creates a [`FnOnceThunk`] implementation from a closure with the same signature as `B`,
-    /// except that the arguments are packed in a tuple.
-    fn with_fn_once<F>(&self, fun: F) -> impl FnOnceThunk<B> + ToBoxedDyn<S>
-    where
-        F: ToBoxedDyn<S> + for<'a, 'b, 'c> PackedFnOnce<'a, 'b, 'c, B>;
-
-    /// Creates a [`FnMutThunk`] implementation from a closure with the same signature as `B`,
-    /// except that the arguments are packed in a tuple.
-    fn with_fn_mut<F>(&self, fun: F) -> impl FnMutThunk<B> + ToBoxedDyn<S>
-    where
-        F: for<'a, 'b, 'c> PackedFnMut<'a, 'b, 'c, B>;
-
-    /// Creates a [`FnThunk`] implementation from a closure with the same signature as `B`,
-    /// except that the arguments are packed in a tuple.
-    fn with_fn<F>(&self, fun: F) -> impl FnThunk<B> + ToBoxedDyn<S>
-    where
-        F: ToBoxedDyn<S> + for<'a, 'b, 'c> PackedFn<'a, 'b, 'c, B>;
-}
-
 /// Trait implemented by (`CC`, [`FnOnce`]) tuples used to generate a bare function thunk template,
 /// where `CC` is a calling convention marker type.
 ///
@@ -192,6 +172,10 @@ pub unsafe trait FnOnceThunk<B: FnPtr>: Sized {
     const THUNK_TEMPLATE_ONCE: *const u8;
 
     /// Calls the closure making up this [`FnOnceThunk`] by value.
+    ///
+    /// # Safety
+    /// The same function-specific safety invariants must be upheld as when calling the underlying
+    /// closure directly.
     unsafe fn call_once<'a, 'b, 'c>(self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
 }
 
@@ -220,7 +204,11 @@ pub unsafe trait FnMutThunk<B: FnPtr>: FnOnceThunk<B> {
     /// the library.
     const THUNK_TEMPLATE_MUT: *const u8;
 
-    /// Calls the closure making up this [`FnMutThunk`] by mutable reference.
+    /// Calls the closure making up this [`FnMutThunk`] by mutable reference.    
+    ///
+    /// # Safety
+    /// The same function-specific safety invariants must be upheld as when calling the underlying
+    /// closure directly.
     unsafe fn call_mut<'a, 'b, 'c>(&mut self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
 }
 
@@ -250,6 +238,10 @@ pub unsafe trait FnThunk<B: FnPtr>: FnMutThunk<B> {
     const THUNK_TEMPLATE: *const u8;
 
     /// Calls the closure making up this [`FnThunk`] by value.
+    ///
+    /// # Safety
+    /// The same function-specific safety invariants must be upheld as when calling the underlying
+    /// closure directly.
     unsafe fn call<'a, 'b, 'c>(&self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
 }
 

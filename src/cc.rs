@@ -32,6 +32,7 @@ macro_rules! cc_thunk_impl_triple {
                 self as *const _
             }
 
+            #[inline(always)]
             fn make_once_thunk<F>(fun: F) -> impl $crate::traits::FnOnceThunk<Self>
             where
                 F: for<'a, 'b, 'c> $crate::traits::PackedFnOnce<'a, 'b, 'c, Self>
@@ -39,6 +40,7 @@ macro_rules! cc_thunk_impl_triple {
                 (Self::CC::default(), move |$($args,)*| fun(($($args,)*)))
             }
 
+            #[inline(always)]
             fn make_mut_thunk<F>(mut fun: F) -> impl $crate::traits::FnMutThunk<Self>
             where
                 F: for<'a, 'b, 'c> $crate::traits::PackedFnMut<'a, 'b, 'c, Self>
@@ -46,6 +48,7 @@ macro_rules! cc_thunk_impl_triple {
                 (Self::CC::default(), move |$($args,)*| fun(($($args,)*)))
             }
 
+            #[inline(always)]
             fn make_thunk<F>(fun: F) -> impl $crate::traits::FnThunk<Self>
             where
                 F: for<'a, 'b, 'c> $crate::traits::PackedFn<'a, 'b, 'c, Self>
@@ -301,11 +304,13 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 self as *const _
             }
 
+            #[inline(always)]
             fn make_once_thunk<F>(fun: F) -> impl $crate::traits::FnOnceThunk<Self>
             where
                 F: for<'a, 'b, 'c> $crate::traits::PackedFnOnce<'a, 'b, 'c, Self>
             {
                 // needed to create a HRTB closure
+                #[inline(always)]
                 fn coerce<R, $($id_tys,)* F>(fun: F) -> F
                 where F: for<'va> FnOnce($($tys,)* core::ffi::VaListImpl<'va>) -> R {
                     fun
@@ -314,10 +319,12 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 (Self::CC::default(), coerced)
             }
 
+            #[inline(always)]
             fn make_mut_thunk<F>(mut fun: F) -> impl $crate::traits::FnMutThunk<Self>
             where
                 F: for<'a, 'b, 'c> $crate::traits::PackedFnMut<'a, 'b, 'c, Self>
             {
+                #[inline(always)]
                 fn coerce<R, $($id_tys,)* F>(fun: F) -> F
                 where F: for<'va> FnMut($($tys,)* core::ffi::VaListImpl<'va>) -> R {
                     fun
@@ -326,10 +333,12 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 (Self::CC::default(), coerced)
             }
 
+            #[inline(always)]
             fn make_thunk<F>(fun: F) -> impl $crate::traits::FnThunk<Self>
             where
                 F: for<'a, 'b, 'c> $crate::traits::PackedFn<'a, 'b, 'c, Self>
             {
+                #[inline(always)]
                 fn coerce<R, $($id_tys,)* F>(fun: F) -> F
                 where F: for<'va> Fn($($tys,)* core::ffi::VaListImpl<'va>) -> R {
                     fun
