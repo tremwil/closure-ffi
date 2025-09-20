@@ -23,6 +23,7 @@ pub mod arch;
 pub mod bare_closure;
 pub mod cc;
 pub mod jit_alloc;
+pub mod thunk_factory;
 pub mod traits;
 
 /// Common imports required to use `closure-ffi`.
