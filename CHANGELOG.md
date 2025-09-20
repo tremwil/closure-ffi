@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v3.0.1] - 2025-06-21
 
 ### Fixed
+- `libc` dependency not compatible with `no_std` on Linux ARM targets
+
+## [v3.0.1] - 2025-06-21
+
+### Fixed
 - docs.rs build
 
 ## [v3.0.0] - 2025-06-20
