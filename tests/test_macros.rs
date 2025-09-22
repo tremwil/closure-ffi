@@ -65,9 +65,12 @@ fn test_non_static_hrtb() {
     assert_eq!(ref_str, &*owned_str2);
 }
 
-bare_hrtb! {
-    type MyGenericFn<T> where T: Clone = for<'a> extern "C" fn(&'a Option<T>) -> Option<&'a T>;
-}
+bare_hrtb!(
+    type MyGenericFn<T>
+    where
+        T: 'static + Clone,
+    = for<'a> extern "C" fn(&'a Option<T>) -> Option<&'a T>;
+);
 
 #[test]
 fn test_generic_hrtb() {
