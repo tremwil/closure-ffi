@@ -1,17 +1,23 @@
 //! Defines calling convention marker types for use with `BareFn` variants.
 
 macro_rules! cc_thunk_impl_triple {
-    ($cconv:ty, $cconv_lit:literal, ($($id_tys: ident,)*), ($($tuple_idx: tt,)*), ($($args:ident: $tys:ty,)*)) => {
+    (
+        $cconv:ty,
+        $cconv_lit:literal,
+        $extra_idx: tt,
+        ($($id_tys: ident,)*),
+        ($($tuple_idx: tt,)*),
+        ($($args:ident: $tys:ty,)*)
+    ) => {
         #[doc(hidden)]
         unsafe impl<R, $($id_tys),*> $crate::traits::FnPtr for unsafe extern $cconv_lit fn($($tys,)*) -> R {
             type CC = $cconv;
-            type Args<'a, 'b, 'c> = ($($tys,)*) where Self: 'a + 'b + 'c;
-            type Ret<'a, 'b, 'c> = R where Self: 'a + 'b + 'c;
+            type Args<'a, 'b, 'c> = ($($tys,)*);
+            type Ret<'a, 'b, 'c> = R;
 
             #[allow(unused_variables)]
             #[inline(always)]
             unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>
-                where Self: 'a + 'b + 'c
             {
                 unsafe { (self)($(args.$tuple_idx,)*) }
             }
@@ -24,6 +30,30 @@ macro_rules! cc_thunk_impl_triple {
             #[inline(always)]
             fn to_ptr(self) -> *const () {
                 self as *const _
+            }
+
+            #[inline(always)]
+            fn make_once_thunk<F>(fun: F) -> impl $crate::traits::FnOnceThunk<Self>
+            where
+                F: for<'a, 'b, 'c> $crate::traits::PackedFnOnce<'a, 'b, 'c, Self>
+            {
+                (Self::CC::default(), move |$($args,)*| fun(($($args,)*)))
+            }
+
+            #[inline(always)]
+            fn make_mut_thunk<F>(mut fun: F) -> impl $crate::traits::FnMutThunk<Self>
+            where
+                F: for<'a, 'b, 'c> $crate::traits::PackedFnMut<'a, 'b, 'c, Self>
+            {
+                (Self::CC::default(), move |$($args,)*| fun(($($args,)*)))
+            }
+
+            #[inline(always)]
+            fn make_thunk<F>(fun: F) -> impl $crate::traits::FnThunk<Self>
+            where
+                F: for<'a, 'b, 'c> $crate::traits::PackedFn<'a, 'b, 'c, Self>
+            {
+                (Self::CC::default(), move |$($args,)*| fun(($($args,)*)))
             }
         }
 
@@ -40,6 +70,14 @@ macro_rules! cc_thunk_impl_triple {
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
+
+            #[allow(unused_variables)]
+            #[inline(always)]
+            unsafe fn call_once<'a, 'b, 'c>(self, args: ($($tys,)*)) ->
+                <unsafe extern $cconv_lit fn($($tys,)*) -> R as $crate::traits::FnPtr>::Ret<'a, 'b, 'c>
+            {
+                (self.1)($(args.$tuple_idx,)*)
+            }
         }
 
         #[doc(hidden)]
@@ -55,6 +93,15 @@ macro_rules! cc_thunk_impl_triple {
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
+
+            #[allow(unused_variables)]
+            #[inline(always)]
+            unsafe fn call_mut<'a, 'b, 'c>(&mut self, args: ($($tys,)*)) ->
+                <unsafe extern $cconv_lit fn($($tys,)*) -> R as $crate::traits::FnPtr>::Ret<'a, 'b, 'c>
+            {
+                (self.1)($(args.$tuple_idx,)*)
+            }
+
         }
 
         #[doc(hidden)]
@@ -70,6 +117,14 @@ macro_rules! cc_thunk_impl_triple {
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
+
+            #[allow(unused_variables)]
+            #[inline(always)]
+            unsafe fn call<'a, 'b, 'c>(&self, args: ($($tys,)*)) ->
+                <unsafe extern $cconv_lit fn($($tys,)*) -> R as $crate::traits::FnPtr>::Ret<'a, 'b, 'c>
+            {
+                (self.1)($(args.$tuple_idx,)*)
+            }
         }
     };
 }
@@ -80,16 +135,25 @@ macro_rules! cc_trait_impl_recursive {
         $cconv:ty,
         $cconv_lit:literal,
         $impl_macro:ident,
+        [$head_extra_idx:tt, $($tail_extra_idx:tt,)*],
         [$head_id_ty:ident, $($tail_id_tys:ident,)*] ($($id_tys:ident,)*),
         [$head_tuple_idx:tt, $($tail_tuple_idx:tt,)*] ($($tuple_idx:tt,)*),
         [$head_arg:ident: $head_ty:ty, $($tail_args:ident: $tail_tys:ty,)*] ($($args:ident: $tys:ty,)*)
     ) => {
-        $impl_macro!($cconv, $cconv_lit, ($($id_tys,)*), ($($tuple_idx,)*), ($($args: $tys,)*));
+        $impl_macro!(
+            $cconv,
+            $cconv_lit,
+            $head_extra_idx,
+            ($($id_tys,)*),
+            ($($tuple_idx,)*),
+            ($($args: $tys,)*)
+        );
 
         cc_trait_impl_recursive!(
             $cconv,
             $cconv_lit,
             $impl_macro,
+            [$($tail_extra_idx,)*],
             [$($tail_id_tys,)*] ($($id_tys,)* $head_id_ty,),
             [$($tail_tuple_idx,)*] ($($tuple_idx,)* $head_tuple_idx,),
             [$($tail_args: $tail_tys,)*] ($($args: $tys,)* $head_arg: $head_ty,)
@@ -101,11 +165,19 @@ macro_rules! cc_trait_impl_recursive {
         $cconv:ty,
         $cconv_lit:literal,
         $impl_macro:ident,
+        [$extra_idx:tt,],
         [] ($($id_tys:ident,)*),
         [] ($($tuple_idx:tt,)*),
         [] ($($args:ident: $tys:ty,)*)
     ) => {
-        $impl_macro!($cconv, $cconv_lit, ($($id_tys,)*), ($($tuple_idx,)*), ($($args: $tys,)*));
+        $impl_macro!(
+            $cconv,
+            $cconv_lit,
+            $extra_idx,
+            ($($id_tys,)*),
+            ($($tuple_idx,)*),
+            ($($args: $tys,)*)
+        );
     };
 }
 
@@ -115,6 +187,7 @@ macro_rules! cc_trait_impl {
             $cconv,
             $cconv_lit,
             $impl_macro,
+            [0,1,2,3,4,5,6,7,8,9,10,11,12,],
             [T0,T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,T11,](),
             [0,1,2,3,4,5,6,7,8,9,10,11,](),
             [a0:T0,a1:T1,a2:T2,a3:T3,a4:T4,a5:T5,a6:T6,a7:T7,a8:T8,a9:T9,a10:T10,a11:T11,]()
@@ -198,29 +271,29 @@ cc_impl!(
     all(windows, target_arch = "x86_64")
 );
 
-/// Marker type representing the variadic part of a C variadic function's arguments.
-///
-/// Because one cannot forward arguments from one to another C variadic function, this is a
-/// zero-variant enum in order to make [`FnPtr::call`](crate::traits::FnPtr) impossible to call.
-#[cfg(any(doc, feature = "c_variadic"))]
-pub enum VarArgs {}
-
 #[cfg(feature = "c_variadic")]
 macro_rules! cc_thunk_impl_triple_variadic {
-    ($cconv:ty, $cconv_lit:literal, ($($id_tys: ident,)*), ($($tuple_idx: tt,)*), ($($args:ident: $tys:ty,)*)) => {
+    (
+        $cconv:ty,
+        $cconv_lit:literal,
+        $extra_idx: tt,
+        ($($id_tys: ident,)*),
+        ($($tuple_idx: tt,)*),
+        ($($args:ident: $tys:ty,)*)
+    ) => {
         #[doc(hidden)]
         unsafe impl<R, $($id_tys),*> $crate::traits::FnPtr for unsafe extern $cconv_lit fn($($tys,)* ...) -> R {
             type CC = $cconv;
-            type Args<'a, 'b, 'c> = ($($tys,)* VarArgs,) where Self: 'a + 'b + 'c;
-            type Ret<'a, 'b, 'c> = R where Self: 'a + 'b + 'c;
+            type Args<'a, 'b, 'c> = ($($tys,)* core::ffi::VaListImpl<'a>,);
+            type Ret<'a, 'b, 'c> = R;
 
             #[allow(unused_variables)]
             #[inline(always)]
             unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>
-                where Self: 'a + 'b + 'c
             {
-                // SAFETY: `args` contains a zero-variant enum and as such this function is impossible to call.
-                unsafe { core::hint::unreachable_unchecked() }
+                const {
+                    panic!("FnPtr::call is not supported on C variadics due to a language limitations")
+                }
             }
 
             #[inline(always)]
@@ -231,6 +304,49 @@ macro_rules! cc_thunk_impl_triple_variadic {
             #[inline(always)]
             fn to_ptr(self) -> *const () {
                 self as *const _
+            }
+
+            #[inline(always)]
+            fn make_once_thunk<F>(fun: F) -> impl $crate::traits::FnOnceThunk<Self>
+            where
+                F: for<'a, 'b, 'c> $crate::traits::PackedFnOnce<'a, 'b, 'c, Self>
+            {
+                // needed to create a HRTB closure
+                #[inline(always)]
+                fn coerce<R, $($id_tys,)* F>(fun: F) -> F
+                where F: for<'va> FnOnce($($tys,)* core::ffi::VaListImpl<'va>) -> R {
+                    fun
+                }
+                let coerced = coerce(move |$($args,)* va| fun(($($args,)* va,)));
+                (Self::CC::default(), coerced)
+            }
+
+            #[inline(always)]
+            fn make_mut_thunk<F>(mut fun: F) -> impl $crate::traits::FnMutThunk<Self>
+            where
+                F: for<'a, 'b, 'c> $crate::traits::PackedFnMut<'a, 'b, 'c, Self>
+            {
+                #[inline(always)]
+                fn coerce<R, $($id_tys,)* F>(fun: F) -> F
+                where F: for<'va> FnMut($($tys,)* core::ffi::VaListImpl<'va>) -> R {
+                    fun
+                }
+                let coerced = coerce(move |$($args,)* va| fun(($($args,)* va,)));
+                (Self::CC::default(), coerced)
+            }
+
+            #[inline(always)]
+            fn make_thunk<F>(fun: F) -> impl $crate::traits::FnThunk<Self>
+            where
+                F: for<'a, 'b, 'c> $crate::traits::PackedFn<'a, 'b, 'c, Self>
+            {
+                #[inline(always)]
+                fn coerce<R, $($id_tys,)* F>(fun: F) -> F
+                where F: for<'va> Fn($($tys,)* core::ffi::VaListImpl<'va>) -> R {
+                    fun
+                }
+                let coerced = coerce(move |$($args,)* va| fun(($($args,)* va,)));
+                (Self::CC::default(), coerced)
             }
         }
 
@@ -250,6 +366,17 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
+
+            #[allow(unused_variables)]
+            #[inline(always)]
+            unsafe fn call_once<'a, 'b, 'c>(
+                self,
+                args: <unsafe extern $cconv_lit fn($($tys,)* ...) -> R as $crate::traits::FnPtr>::Args<'a, 'b, 'c>
+            ) ->
+                <unsafe extern $cconv_lit fn($($tys,)* ...) -> R as $crate::traits::FnPtr>::Ret<'a, 'b, 'c>
+            {
+                (self.1)($(args.$tuple_idx,)* args.$extra_idx)
+            }
         }
 
         #[doc(hidden)]
@@ -268,6 +395,17 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
+
+            #[allow(unused_variables)]
+            #[inline(always)]
+            unsafe fn call_mut<'a, 'b, 'c>(
+                &mut self,
+                args: <unsafe extern $cconv_lit fn($($tys,)* ...) -> R as $crate::traits::FnPtr>::Args<'a, 'b, 'c>
+            ) ->
+                <unsafe extern $cconv_lit fn($($tys,)* ...) -> R as $crate::traits::FnPtr>::Ret<'a, 'b, 'c>
+            {
+                (self.1)($(args.$tuple_idx,)* args.$extra_idx)
+            }
         }
 
         #[doc(hidden)]
@@ -286,6 +424,17 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
+
+            #[allow(unused_variables)]
+            #[inline(always)]
+            unsafe fn call<'a, 'b, 'c>(
+                &self,
+                args: <unsafe extern $cconv_lit fn($($tys,)* ...) -> R as $crate::traits::FnPtr>::Args<'a, 'b, 'c>
+            ) ->
+                <unsafe extern $cconv_lit fn($($tys,)* ...) -> R as $crate::traits::FnPtr>::Ret<'a, 'b, 'c>
+            {
+                (self.1)($(args.$tuple_idx,)* args.$extra_idx)
+            }
         }
     };
 }

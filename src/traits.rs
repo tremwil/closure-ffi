@@ -98,9 +98,7 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
     /// The arguments of the function, as a tuple.
     ///
     /// This is a GAT with 3 independent lifetimes to support most higher-kinded bare functions.
-    type Args<'a, 'b, 'c>: core::marker::Tuple
-    where
-        Self: 'a + 'b + 'c;
+    type Args<'a, 'b, 'c>: core::marker::Tuple;
 
     #[cfg(any(doc, not(feature = "tuple_trait")))]
     #[cfg_attr(docsrs, doc(cfg(all())))]
@@ -111,24 +109,18 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
     /// When the `tuple_trait` crate feature is enabled, this associated type has a
     /// [`core::marker::Tuple`] bound. Note that this also requires the `tuple_trait` nightly
     /// feature.
-    type Args<'a, 'b, 'c>
-    where
-        Self: 'a + 'b + 'c;
+    type Args<'a, 'b, 'c>;
 
     /// The return type of the function.
     ///
     /// This is a GAT with 3 independent lifetimes to support most higher-kinded bare functions.
-    type Ret<'a, 'b, 'c>
-    where
-        Self: 'a + 'b + 'c;
+    type Ret<'a, 'b, 'c>;
 
     /// Calls self.
     ///
     /// # Safety
     /// The same function-specific safety invariants must be upheld as when calling it directly.
-    unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>
-    where
-        Self: 'a + 'b + 'c;
+    unsafe fn call<'a, 'b, 'c>(self, args: Self::Args<'a, 'b, 'c>) -> Self::Ret<'a, 'b, 'c>;
 
     /// Creates `Self` from an untyped pointer.
     ///
@@ -138,6 +130,24 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
 
     /// Casts `self` to an untyped pointer.
     fn to_ptr(self) -> *const ();
+
+    /// Creates a [`FnOnceThunk`] implementation from a closure taking the same arguments as this
+    /// function pointer.
+    fn make_once_thunk<F>(fun: F) -> impl FnOnceThunk<Self>
+    where
+        F: for<'a, 'b, 'c> PackedFnOnce<'a, 'b, 'c, Self>;
+
+    /// Creates a [`FnMutThunk`] implementation from a closure taking the same arguments as this
+    /// function pointer.
+    fn make_mut_thunk<F>(fun: F) -> impl FnMutThunk<Self>
+    where
+        F: for<'a, 'b, 'c> PackedFnMut<'a, 'b, 'c, Self>;
+
+    /// Creates a [`FnThunk`] implementation from a closure taking the same arguments as this
+    /// function pointer.
+    fn make_thunk<F>(fun: F) -> impl FnThunk<Self>
+    where
+        F: for<'a, 'b, 'c> PackedFn<'a, 'b, 'c, Self>;
 }
 
 /// Trait implemented by (`CC`, [`FnOnce`]) tuples used to generate a bare function thunk template,
@@ -157,9 +167,16 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
 ///   implementations of this trait for specific higher-ranked bare functions. This is only possible
 ///   if a local type is present in both the trait generic parameters and the implementor. By
 ///   implementing on tuples, we can thus use a local type for the calling convention.
-pub unsafe trait FnOnceThunk<B: FnPtr> {
+pub unsafe trait FnOnceThunk<B: FnPtr>: Sized {
     /// Type-erased bare function thunk template calling `self` by move. Internal to the library.
     const THUNK_TEMPLATE_ONCE: *const u8;
+
+    /// Calls the closure making up this [`FnOnceThunk`] by value.
+    ///
+    /// # Safety
+    /// The same function-specific safety invariants must be upheld as when calling the underlying
+    /// closure directly.
+    unsafe fn call_once<'a, 'b, 'c>(self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
 }
 
 /// Trait implemented by (`CC`, [`FnMut`]) tuples used to generate a bare function thunk template,
@@ -186,6 +203,13 @@ pub unsafe trait FnMutThunk<B: FnPtr>: FnOnceThunk<B> {
     /// Type-erased bare function thunk template calling `self` by mutable reference. Internal to
     /// the library.
     const THUNK_TEMPLATE_MUT: *const u8;
+
+    /// Calls the closure making up this [`FnMutThunk`] by mutable reference.    
+    ///
+    /// # Safety
+    /// The same function-specific safety invariants must be upheld as when calling the underlying
+    /// closure directly.
+    unsafe fn call_mut<'a, 'b, 'c>(&mut self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
 }
 
 /// Trait implemented by (`CC`, [`Fn`]) tuples used to generate a bare function thunk template,
@@ -212,4 +236,47 @@ pub unsafe trait FnThunk<B: FnPtr>: FnMutThunk<B> {
     /// Type-erased bare function thunk template calling `self` by immutable reference. Internal to
     /// the library.
     const THUNK_TEMPLATE: *const u8;
+
+    /// Calls the closure making up this [`FnThunk`] by value.
+    ///
+    /// # Safety
+    /// The same function-specific safety invariants must be upheld as when calling the underlying
+    /// closure directly.
+    unsafe fn call<'a, 'b, 'c>(&self, args: B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>;
+}
+
+/// Trait alias for [`FnOnce(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`](FnOnce).
+///
+/// This is necessary to express the return type of [`FnPtr::make_once_thunk`].
+pub trait PackedFnOnce<'a, 'b, 'c, B: FnPtr>:
+    FnOnce(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+{
+}
+
+impl<'a, 'b, 'c, B: FnPtr, F> PackedFnOnce<'a, 'b, 'c, B> for F where
+    F: FnOnce(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+{
+}
+
+/// Trait alias for [`FnMut(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`](FnMut).
+///
+/// This is necessary to express the return type of [`FnPtr::make_mut_thunk`].
+pub trait PackedFnMut<'a, 'b, 'c, B: FnPtr>:
+    FnMut(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+{
+}
+
+impl<'a, 'b, 'c, B: FnPtr, F> PackedFnMut<'a, 'b, 'c, B> for F where
+    F: FnMut(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+{
+}
+
+/// Trait alias for [`Fn(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>`](Fn).
+///
+/// This is necessary to express the return type of [`FnPtr::make_thunk`].
+pub trait PackedFn<'a, 'b, 'c, B: FnPtr>: Fn(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c> {}
+
+impl<'a, 'b, 'c, B: FnPtr, F> PackedFn<'a, 'b, 'c, B> for F where
+    F: Fn(B::Args<'a, 'b, 'c>) -> B::Ret<'a, 'b, 'c>
+{
 }
