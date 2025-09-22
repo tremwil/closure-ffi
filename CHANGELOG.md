@@ -5,7 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v3.0.1] - 2025-06-21
+## [v4.0.0] - 2025-09-22
+
+This update adds the scaffolding required to implement "higher order" transformations on bare function thunks. For example, it is now possible to write a function that synchonizes an generic `FnMutThunk` implementation while printing its return value:
+
+```rs
+use closure_ffi::{thunk_factory, traits::{FnPtr, FnThunk, FnMutThunk}};
+
+fn lock_and_debug<B: FnPtr, F: Send>(fun: F) -> impl FnThunk<B> + Sync
+where
+    for<'a, 'b, 'c> B::Ret<'a, 'b, 'c>: core::fmt::Debug,
+    (cc::C, F): FnMutThunk<B>,
+{
+    let locked = std::sync::Mutex::new((cc::C, fun));
+    thunk_factory::make_sync(move |args| unsafe {
+        let ret = locked.lock().unwrap().call_mut(args);
+        println!("value: {ret:?}");
+        ret
+    })
+}
+```
+
+This is particularly useful for hooking libraries.
+
+### Breaking Changes
+- Removed `where Self: 'a + 'b + 'c` bounds on `FnPtr::Args` and `FnPtr::Ret`
+- Regression in the expressivity of `bare_hrtb!()`: Now requires a `'static` bound on certain generic parameters
+- removed zero-variant enum from `FnPtr::Args` for extern variaric functions to be able to implement the new trait functions. `FnPtr::call` now const panics instead of being impossible to call for them.
+
+### Added
+- `FnPtr::make_*_thunk` functions that can create a `Fn*Thunk` implementation from a closure with tuple-packed arguments.
+- `FnOnceThunk::call_once`, `FnMutThunk::call_mut` and `FnThunk::call` for invoking the underlying closure with tuple-packed arguments.
+- `thunk_factory` module for creating `Fn*Thunk` implementations that satisfy combinations of `Send` and `Sync` bounds.
 
 ### Fixed
 - `libc` dependency not compatible with `no_std` on Linux ARM targets
