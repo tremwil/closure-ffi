@@ -106,7 +106,7 @@ macro_rules! bare_hrtb_inner {
 /// #![cfg_attr(feature = "coverage", feature(coverage_attribute))]
 ///
 /// closure_ffi::bare_hrtb! {
-///     type MyFn<T: Clone> = for<'a> extern "C" fn(&'a T) -> T;
+///     type MyFn<T: Clone + 'static> = for<'a> extern "C" fn(&'a T) -> T;
 /// }
 /// ```
 ///
@@ -114,6 +114,8 @@ macro_rules! bare_hrtb_inner {
 /// the same visibility.
 ///
 /// # Limitations
+///
+/// ## Maximum of 3 independent lifetimes
 ///
 /// Higher-ranked bare functions with more than 3 independent bound lifetimes are not supported.
 /// For example, the following will not compile:
@@ -125,6 +127,8 @@ macro_rules! bare_hrtb_inner {
 ///     type MyFn = extern "C" fn<'a, 'b, 'c, 'd>(&'a u8, &'b u8) -> (&'c u8, &'d u8);
 /// }
 /// ```
+///
+/// ## No implicit higher-ranked lifetimes
 ///
 /// Furthermore, implicit higher-ranked lifetimes are not supported in the signature. So
 /// ```compile_fail
@@ -141,6 +145,22 @@ macro_rules! bare_hrtb_inner {
 ///
 /// closure_ffi::bare_hrtb! {
 ///     type MyFn = for<'a> extern "C" fn(&'a u8) -> &'a u8;
+/// }
+/// ```
+///
+/// ## Static bound requirements on generic parameters
+///
+/// Generic parameters whose lifetime is implicitly lower-bounded by one of the `for<...>` lifetimes
+/// must be `'static`. For example, the following will not compile without a `'static` bound on `T`
+/// and `U`, but no bound is required on `V`:
+///
+/// ```compile_fail
+/// #![cfg_attr(feature = "coverage", feature(coverage_attribute))]
+///
+/// struct RefMut<'a, T>(&'a mut T);
+///
+/// closure_ffi::bare_hrtb! {
+///     type MyFn<T, U, V> = for<'a> extern "C" fn(&'a T, RefMut<'a, U>) -> V;
 /// }
 /// ```
 ///

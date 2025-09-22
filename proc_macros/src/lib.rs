@@ -197,12 +197,38 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
         pm2::Span::call_site(),
     );
     let crate_path = &input.crate_path;
+    let thunk_attrs = &input.thunk_attrs;
+    let alias_ident = &input.alias.ident;
+    let alias_attrs = &input.alias.attrs;
+    let alias_vis = &input.alias.vis;
+    let alias_gen = &input.alias.generics;
+    let (alias_impl_gen, alias_ty_params, alias_where) = &input.alias.generics.split_for_impl();
+    let mut impl_lifetimes =
+        bare_fn.lifetimes.as_ref().map(|lt| lt.lifetimes.clone()).unwrap_or_default();
+    impl_lifetimes.extend((impl_lifetimes.len()..3).map(|i| {
+        syn::GenericParam::Lifetime(syn::LifetimeParam::new(syn::Lifetime::new(
+            &format!("'_extra_{i}"),
+            pm2::Span::call_site(),
+        )))
+    }));
+    let arg_indices: Vec<_> = (0..bare_fn.inputs.len() as u32)
+        .map(|index| {
+            syn::Member::Unnamed(syn::Index {
+                index,
+                span: pm2::Span::call_site(),
+            })
+        })
+        .collect();
 
     struct ImplDetails {
         thunk_trait_path: &'static str,
         fn_trait_path: &'static str,
         const_name: &'static str,
-        body: pm2::TokenStream,
+        call_ident: &'static str,
+        call_receiver: pm2::TokenStream,
+        thunk_body: pm2::TokenStream,
+        factory_ident: &'static str,
+        factory_bound: &'static str,
     }
 
     let impl_blocks: [ImplDetails; 3] = [
@@ -210,7 +236,11 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             thunk_trait_path: "traits::FnOnceThunk",
             fn_trait_path: "::core::ops::FnOnce",
             const_name: "THUNK_TEMPLATE_ONCE",
-            body: quote! {
+            call_ident: "call_once",
+            factory_ident: "make_once_thunk",
+            factory_bound: "traits::PackedFnOnce",
+            call_receiver: syn::Token![self](pm2::Span::call_site()).into_token_stream(),
+            thunk_body: quote! {
                 let closure_ptr: *mut #f_ident;
                 #crate_path::arch::_thunk_asm!(closure_ptr);
                 #crate_path::arch::_never_inline(|| closure_ptr.read()(#(#arg_idents),*))
@@ -220,7 +250,11 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             thunk_trait_path: "traits::FnMutThunk",
             fn_trait_path: "::core::ops::FnMut",
             const_name: "THUNK_TEMPLATE_MUT",
-            body: quote! {
+            call_ident: "call_mut",
+            factory_ident: "make_mut_thunk",
+            factory_bound: "traits::PackedFnMut",
+            call_receiver: quote! { &mut self },
+            thunk_body: quote! {
                 let closure_ptr: *mut #f_ident;
                 #crate_path::arch::_thunk_asm!(closure_ptr);
                 #crate_path::arch::_never_inline(|| (&mut *closure_ptr)(#(#arg_idents),*))
@@ -230,7 +264,11 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             thunk_trait_path: "traits::FnThunk",
             fn_trait_path: "::core::ops::Fn",
             const_name: "THUNK_TEMPLATE",
-            body: quote! {
+            call_ident: "call",
+            factory_ident: "make_thunk",
+            factory_bound: "traits::PackedFn",
+            call_receiver: quote! { &self },
+            thunk_body: quote! {
                 let closure_ptr: *const #f_ident;
                 #crate_path::arch::_thunk_asm!(closure_ptr);
                 #crate_path::arch::_never_inline(|| (&*closure_ptr)(#(#arg_idents),*))
@@ -238,18 +276,19 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
         },
     ];
 
-    let thunk_attrs = &input.thunk_attrs;
-    let alias_ident = &input.alias.ident;
-    let alias_attrs = &input.alias.attrs;
-    let alias_vis = &input.alias.vis;
-    let alias_gen = &input.alias.generics;
-    let (alias_impl_gen, alias_ty_params, alias_where) = &input.alias.generics.split_for_impl();
+    struct ImplTokens {
+        thunk_impl: pm2::TokenStream,
+        thunk_factory_impl: pm2::TokenStream,
+    }
 
-    let impls = impl_blocks.iter().map(|impl_block| {
+    let impl_tokens: Vec<_> = impl_blocks.iter().map(|impl_block| {
         let fn_bound =
             bare_fn_to_trait_bound(&input.bare_fn, path_from_str(impl_block.fn_trait_path));
+
         let const_ident = syn::Ident::new(impl_block.const_name, pm2::Span::call_site());
-        let body = &impl_block.body;
+        let call_ident = syn::Ident::new(impl_block.call_ident, pm2::Span::call_site());
+        let call_receiver = &impl_block.call_receiver;
+        let body = &impl_block.thunk_body;
         let mut thunk_trait = input.crate_path.clone();
         thunk_trait.segments.extend(path_from_str(impl_block.thunk_trait_path).segments);
 
@@ -269,7 +308,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
         let (impl_generics, _, where_clause) = generics.split_for_impl();
         let sig_tys = generics.type_params().map(|t| &t.ident);
 
-        quote! {
+        let thunk_impl = quote! {
             unsafe impl #impl_generics #thunk_trait<#alias_ident #alias_ty_params>
             for (#cc_marker_ident, #f_ident) #where_clause
             {
@@ -280,23 +319,46 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
                     }
                     #thunk_ident::<#(#sig_tys),*> as *const ::core::primitive::u8
                 };
+
+                #[allow(unused_variables)]
+                #[inline(always)]
+                unsafe fn #call_ident<'_x, '_y, '_z>(#call_receiver, args: <#alias_ident #alias_ty_params as #crate_path::traits::FnPtr>::Args<'_x, '_y, '_z>
+                ) ->
+                    <#alias_ident #alias_ty_params as #crate_path::traits::FnPtr>::Ret<'_x, '_y, '_z>
+                {
+                    (self.1)(#(args.#arg_indices,)*)
+                }
             }
+        };
+
+        let factory_bound_path = path_from_str(impl_block.factory_bound);
+        let factory_ident = syn::Ident::new(impl_block.factory_ident, pm2::Span::call_site());
+        let thunk_factory_impl = quote! {
+            #[inline(always)]
+            #[allow(unused_mut)]
+            fn #factory_ident<F>(mut fun: F) -> impl #thunk_trait<Self>
+            where
+                F: for<'_x, '_y, '_z> #crate_path::#factory_bound_path<'_x, '_y, '_z, Self>
+            {
+                #[inline(always)]
+                fn coerce #impl_generics (fun: #f_ident) -> #f_ident #where_clause {
+                    fun
+                }
+
+                let coerced = coerce(move |#(#arg_idents,)*| fun((#(#arg_idents,)*)));
+                (#cc_marker_ident, coerced)
+            }
+        };
+
+        ImplTokens {
+            thunk_impl,
+            thunk_factory_impl
         }
-    });
+    }).collect();
 
     let alias_ident_lit = syn::LitStr::new(&alias_ident.to_string(), pm2::Span::call_site());
     let alias_ident_doc_lit =
         syn::LitStr::new(&format!("[`{alias_ident}`]."), pm2::Span::call_site());
-
-    let mut punc_impl_lifetimes =
-        bare_fn.lifetimes.as_ref().map(|lt| lt.lifetimes.clone()).unwrap_or_default();
-    punc_impl_lifetimes.extend((punc_impl_lifetimes.len()..3).map(|i| {
-        syn::GenericParam::Lifetime(syn::LifetimeParam::new(syn::Lifetime::new(
-            &format!("'_extra_{i}"),
-            pm2::Span::call_site(),
-        )))
-    }));
-    let impl_lifetimes: Vec<_> = punc_impl_lifetimes.iter().collect();
 
     let tuple_args = bare_fn.inputs.iter().map(|i| &i.ty);
     let bare_fn_output = match &bare_fn.output {
@@ -306,12 +368,9 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
         }),
         syn::ReturnType::Type(_, ty) => ty,
     };
-    let arg_indices = (0..bare_fn.inputs.len() as u32).map(|index| {
-        syn::Member::Unnamed(syn::Index {
-            index,
-            span: pm2::Span::call_site(),
-        })
-    });
+
+    let trait_impls = impl_tokens.iter().map(|t| &t.thunk_impl);
+    let thunk_factory_impls = impl_tokens.iter().map(|t| &t.thunk_factory_impl);
 
     quote! {
         /// Calling convention marker type for higher-ranked bare function wrapper type
@@ -352,9 +411,9 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             }
         }
 
-        impl #alias_impl_gen ::core::convert::Into<#bare_fn> for #alias_ident #alias_ty_params #alias_where {
-            fn into(self) -> #bare_fn {
-                self.0
+        impl #alias_impl_gen ::core::convert::From<#alias_ident #alias_ty_params> for #bare_fn #alias_where {
+            fn from(value: #alias_ident #alias_ty_params) -> Self {
+                value.0
             }
         }
 
@@ -368,15 +427,14 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
 
         unsafe impl #alias_impl_gen #crate_path::traits::FnPtr for #alias_ident #alias_ty_params #alias_where {
             type CC = #cc_marker_ident;
-            type Args<#punc_impl_lifetimes> = (#(#tuple_args,)*) where Self: #(#impl_lifetimes)+*;
-            type Ret<#punc_impl_lifetimes> = #bare_fn_output where Self: #(#impl_lifetimes)+*;
+            type Args<#impl_lifetimes> = (#(#tuple_args,)*);
+            type Ret<#impl_lifetimes> = #bare_fn_output;
 
             #[inline(always)]
-            unsafe fn call<#punc_impl_lifetimes>(
+            unsafe fn call<#impl_lifetimes>(
                 self,
-                args: Self::Args<#punc_impl_lifetimes>
-            ) -> Self::Ret<#punc_impl_lifetimes>
-                where Self: #(#impl_lifetimes)+*
+                args: Self::Args<#impl_lifetimes>
+            ) -> Self::Ret<#impl_lifetimes>
             {
                 (self.0)(#(args.#arg_indices,)*)
             }
@@ -390,9 +448,11 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             fn to_ptr(self) -> *const () {
                 self.0 as *const _
             }
+
+            #(#thunk_factory_impls)*
         }
 
-        #(#impls)*
+        #(#trait_impls)*
     }
     .into()
 }
