@@ -3,7 +3,6 @@
 
 mod slab_alloc;
 
-use closure_ffi::traits::{FnMutThunk, FnPtr, FnThunk};
 #[allow(unused_imports)]
 use closure_ffi::{cc, BareFn, BareFnMut, BareFnOnce, UntypedBareFn};
 use slab_alloc::SlabAlloc;
@@ -278,7 +277,11 @@ fn test_upcast() {
 #[cfg(feature = "std")]
 #[test]
 fn test_wrap() {
-    use closure_ffi::{thunk_factory, BareFnSync};
+    use closure_ffi::{
+        thunk_factory,
+        traits::{FnMutThunk, FnPtr, FnThunk},
+        BareFnSync,
+    };
 
     fn lock_and_debug<B: FnPtr, F: Send>(fun: F) -> impl FnThunk<B> + Sync
     where
