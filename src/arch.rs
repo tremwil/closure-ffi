@@ -156,75 +156,110 @@ macro_rules! _thunk_asm {
 }
 
 #[derive(Debug)]
-pub(crate) struct ThunkInfo {
-    pub alloc_base: *const u8,
-    pub thunk: *const (),
+pub(crate) struct AllocatedThunk<J: JitAlloc> {
+    alloc_base: *const u8,
+    thunk: *const (),
+    jit: J,
 }
 
-/// Creates a thunk to a closure from a thunk template.
-///
-/// # Safety
-/// Given a closure of type `F`, the following must hold:
-/// - `thunk_template` is a pointer obtained via the associated const of the
-///   `crate::thunk::Fn*Thunk<C, B>` trait implemented on (C, F). Namely, it is a bare function that
-///   first invokes [`_thunk_asm`] to obtain the closure pointer, then invokes it.
-/// - `closure_ptr` is a valid pointer to an initialized instance of `F`.
-pub(crate) unsafe fn create_thunk<J: JitAlloc>(
-    thunk_template: *const u8,
-    closure_ptr: *const (),
-    jit: &J,
-) -> Result<ThunkInfo, JitAllocError> {
-    const MAGIC_ALIGN: usize = align_of::<consts::Magic>();
-
-    // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
-    #[cfg(thumb_mode)]
-    let thunk_template = thunk_template.map_addr(|a| a & !1);
-
-    // Align to pointer size and search for the magic number to be replaced by the
-    // closure address
-    let mut offset = thunk_template.align_offset(MAGIC_ALIGN);
-    while thunk_template.add(offset).cast::<consts::Magic>().read() != consts::CLOSURE_ADDR_MAGIC {
-        offset += MAGIC_ALIGN;
+impl<J: JitAlloc> Drop for AllocatedThunk<J> {
+    fn drop(&mut self) {
+        if !self.alloc_base.is_null() {
+            let _ = unsafe { self.jit.release(self.alloc_base) };
+        }
     }
-    let thunk_size = offset.wrapping_add_signed(consts::THUNK_EXTRA_SIZE);
+}
 
-    // Skip initial bytes for proper alignment
-    let (rx, rw) = jit.alloc(thunk_size + MAGIC_ALIGN - 1)?;
-    let align_offset = rw.add(offset).align_offset(MAGIC_ALIGN);
-    let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
+impl<J: JitAlloc> AllocatedThunk<J> {
+    /// Gets a pointer to the JITed bare function thunk.
+    pub fn thunk_ptr(&self) -> *const () {
+        self.thunk
+    }
 
-    jit.protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
+    /// JITs a thunk to a closure from a thunk template.
+    ///
+    /// Note that if the closure is a ZST, no JIT allocation occurs as the thunk template is a valid
+    /// thunk for all instances of the closure.
+    ///
+    /// # Safety
+    /// Given a closure of type `F`, the following must hold:
+    /// - `size_of::<F>() == closure_size`.
+    /// - `thunk_template` is a pointer obtained via the associated const of the
+    ///   `crate::thunk::Fn*Thunk<C, B>` trait implemented on (C, F). Namely, it is:
+    ///   - if `F` is not a ZST, a bare function that first invokes [`_thunk_asm`] to obtain the
+    ///     closure pointer, then invokes it;
+    ///   - if `F` is a ZST, a bare function that creates a dangling closure pointer and invokes it.
+    /// - `closure_ptr` is a valid pointer to an initialized instance of `F` (note: may be dandling
+    ///   if `F` is a ZST!).
+    pub unsafe fn new(
+        thunk_template: *const u8,
+        closure_ptr: *const (),
+        closure_size: usize,
+        jit: J,
+    ) -> Result<Self, JitAllocError> {
+        if closure_size == 0 {
+            return Ok(AllocatedThunk {
+                alloc_base: core::ptr::null(),
+                thunk: thunk_template.cast(),
+                jit,
+            });
+        }
 
-    // Copy the prologue + asm block from the compiler-generated thunk
-    core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
+        const MAGIC_ALIGN: usize = align_of::<consts::Magic>();
 
-    // Write the closure pointer
-    rw.add(offset.wrapping_add_signed(consts::CLOSURE_ADDR_OFFSET))
-        .cast::<*const ()>()
-        .write_unaligned(closure_ptr);
+        // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
+        #[cfg(thumb_mode)]
+        let thunk_template = thunk_template.map_addr(|a| a & !1);
 
-    // On x86, we use a PE/ELF relocation to load the return address instead
-    #[cfg(not(target_arch = "x86"))]
-    {
-        // Write the jump back to the compiler-generated thunk
-        let thunk_return = thunk_template.add(offset + consts::THUNK_RETURN_OFFSET);
+        // Align to pointer size and search for the magic number to be replaced by the
+        // closure address
+        let mut offset = thunk_template.align_offset(MAGIC_ALIGN);
+        while thunk_template.add(offset).cast::<consts::Magic>().read()
+            != consts::CLOSURE_ADDR_MAGIC
+        {
+            offset += MAGIC_ALIGN;
+        }
+        let thunk_size = offset.wrapping_add_signed(consts::THUNK_EXTRA_SIZE);
+
+        // Skip initial bytes for proper alignment
+        let (rx, rw) = jit.alloc(thunk_size + MAGIC_ALIGN - 1)?;
+        let align_offset = rw.add(offset).align_offset(MAGIC_ALIGN);
+        let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
+
+        jit.protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
+
+        // Copy the prologue + asm block from the compiler-generated thunk
+        core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
+
+        // Write the closure pointer
+        rw.add(offset.wrapping_add_signed(consts::CLOSURE_ADDR_OFFSET))
+            .cast::<*const ()>()
+            .write_unaligned(closure_ptr);
+
+        // On x86, we use a PE/ELF relocation to load the return address instead
+        #[cfg(not(target_arch = "x86"))]
+        {
+            // Write the jump back to the compiler-generated thunk
+            let thunk_return = thunk_template.add(offset + consts::THUNK_RETURN_OFFSET);
+            // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
+            #[cfg(thumb_mode)]
+            let thunk_return = thunk_return.map_addr(|a| a | 1);
+            rw.add(offset + size_of::<usize>()).cast::<*const u8>().write(thunk_return);
+        }
+
+        jit.protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
+        jit.flush_instruction_cache(thunk_rx, thunk_size);
+
         // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
         #[cfg(thumb_mode)]
-        let thunk_return = thunk_return.map_addr(|a| a | 1);
-        rw.add(offset + size_of::<usize>()).cast::<*const u8>().write(thunk_return);
+        let thunk_rx = thunk_rx.map_addr(|a| a | 1);
+
+        Ok(AllocatedThunk {
+            alloc_base: rx,
+            thunk: thunk_rx.cast(),
+            jit,
+        })
     }
-
-    jit.protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
-    jit.flush_instruction_cache(thunk_rx, thunk_size);
-
-    // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
-    #[cfg(thumb_mode)]
-    let thunk_rx = thunk_rx.map_addr(|a| a | 1);
-
-    Ok(ThunkInfo {
-        alloc_base: rx,
-        thunk: thunk_rx.cast(),
-    })
 }
 
 /// Runs the provided closure and returns the result. Guaranteed to not inline its code.

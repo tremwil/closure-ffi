@@ -64,9 +64,15 @@ macro_rules! cc_thunk_impl_triple {
             const THUNK_TEMPLATE_ONCE: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
-                    let closure_ptr: *mut F;
-                    $crate::arch::_thunk_asm!(closure_ptr);
-                    $crate::arch::_never_inline(|| closure_ptr.read()($($args),*))
+                    if const { core::mem::size_of::<F>() == 0 } {
+                        let fun: F = unsafe { core::mem::zeroed() };
+                        fun($($args),*)
+                    }
+                    else {
+                        let closure_ptr: *mut F;
+                        $crate::arch::_thunk_asm!(closure_ptr);
+                        $crate::arch::_never_inline(|| closure_ptr.read()($($args),*))
+                    }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
@@ -87,9 +93,15 @@ macro_rules! cc_thunk_impl_triple {
             const THUNK_TEMPLATE_MUT: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F: FnMut($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
-                    let closure_ptr: *mut F;
-                    $crate::arch::_thunk_asm!(closure_ptr);
-                    $crate::arch::_never_inline(|| (&mut *closure_ptr)($($args),*))
+                    if const { core::mem::size_of::<F>() == 0 } {
+                        let fun: &mut F = unsafe { &mut *core::ptr::dangling_mut() };
+                        fun($($args),*)
+                    }
+                    else {
+                        let closure_ptr: *mut F;
+                        $crate::arch::_thunk_asm!(closure_ptr);
+                        $crate::arch::_never_inline(|| (&mut *closure_ptr)($($args),*))
+                    }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
@@ -111,9 +123,15 @@ macro_rules! cc_thunk_impl_triple {
             const THUNK_TEMPLATE: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F: Fn($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
-                    let closure_ptr: *const F;
-                    $crate::arch::_thunk_asm!(closure_ptr);
-                    $crate::arch::_never_inline(|| (&*closure_ptr)($($args),*))
+                    if const { core::mem::size_of::<F>() == 0 } {
+                        let fun: &F = unsafe { &*core::ptr::dangling_mut() };
+                        fun($($args),*)
+                    }
+                    else {
+                        let closure_ptr: *const F;
+                        $crate::arch::_thunk_asm!(closure_ptr);
+                        $crate::arch::_never_inline(|| (&*closure_ptr)($($args),*))
+                    }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
@@ -360,9 +378,15 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 where
                     F: for<'va> FnOnce($($tys,)* core::ffi::VaListImpl<'va>) -> R
                 {
-                    let closure_ptr: *mut F;
-                    $crate::arch::_thunk_asm!(closure_ptr);
-                    $crate::arch::_never_inline(|| closure_ptr.read()($($args,)* va_args))
+                    if const { core::mem::size_of::<F>() == 0 } {
+                        let fun: F = unsafe { core::mem::zeroed() };
+                        fun($($args,)* va_args)
+                    }
+                    else {
+                        let closure_ptr: *mut F;
+                        $crate::arch::_thunk_asm!(closure_ptr);
+                        $crate::arch::_never_inline(|| closure_ptr.read()($($args,)* va_args))
+                    }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
@@ -389,9 +413,15 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 where
                     F: for<'va> FnMut($($tys,)* core::ffi::VaListImpl<'va>) -> R
                 {
-                    let closure_ptr: *mut F;
-                    $crate::arch::_thunk_asm!(closure_ptr);
-                    $crate::arch::_never_inline(|| (&mut *closure_ptr)($($args,)* va_args))
+                    if const { core::mem::size_of::<F>() == 0 } {
+                        let fun: &mut F = unsafe { &mut *core::ptr::dangling_mut() };
+                        fun($($args,)* va_args)
+                    }
+                    else {
+                        let closure_ptr: *mut F;
+                        $crate::arch::_thunk_asm!(closure_ptr);
+                        $crate::arch::_never_inline(|| (&mut *closure_ptr)($($args,)* va_args))
+                    }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
@@ -418,9 +448,15 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 where
                     F: for<'va> Fn($($tys,)* core::ffi::VaListImpl<'va>) -> R
                 {
-                    let closure_ptr: *const F;
-                    $crate::arch::_thunk_asm!(closure_ptr);
-                    $crate::arch::_never_inline(|| (&*closure_ptr)($($args,)* va_args))
+                    if const { core::mem::size_of::<F>() == 0 } {
+                        let fun: &F = unsafe { &*core::ptr::dangling_mut() };
+                        fun($($args,)* va_args)
+                    }
+                    else {
+                        let closure_ptr: *const F;
+                        $crate::arch::_thunk_asm!(closure_ptr);
+                        $crate::arch::_never_inline(|| (&*closure_ptr)($($args,)* va_args))
+                    }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
             };
