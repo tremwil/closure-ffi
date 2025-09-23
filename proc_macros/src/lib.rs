@@ -241,9 +241,15 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             factory_bound: "traits::PackedFnOnce",
             call_receiver: syn::Token![self](pm2::Span::call_site()).into_token_stream(),
             thunk_body: quote! {
-                let closure_ptr: *mut #f_ident;
-                #crate_path::arch::_thunk_asm!(closure_ptr);
-                #crate_path::arch::_never_inline(|| closure_ptr.read()(#(#arg_idents),*))
+                if const { ::core::mem::size_of::<#f_ident>() == 0 } {
+                    let closure: #f_ident = unsafe { ::core::mem::zeroed() };
+                    closure(#(#arg_idents),*)
+                }
+                else {
+                    let closure_ptr: *mut #f_ident;
+                    #crate_path::arch::_thunk_asm!(closure_ptr);
+                    #crate_path::arch::_never_inline(|| closure_ptr.read()(#(#arg_idents),*))
+                }
             },
         },
         ImplDetails {
@@ -255,9 +261,15 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             factory_bound: "traits::PackedFnMut",
             call_receiver: quote! { &mut self },
             thunk_body: quote! {
-                let closure_ptr: *mut #f_ident;
-                #crate_path::arch::_thunk_asm!(closure_ptr);
-                #crate_path::arch::_never_inline(|| (&mut *closure_ptr)(#(#arg_idents),*))
+                if const { ::core::mem::size_of::<#f_ident>() == 0 } {
+                    let closure: &mut #f_ident = unsafe { &mut *::core::ptr::dangling_mut() };
+                    closure(#(#arg_idents),*)
+                }
+                else {
+                    let closure_ptr: *mut #f_ident;
+                    #crate_path::arch::_thunk_asm!(closure_ptr);
+                    #crate_path::arch::_never_inline(|| (&mut *closure_ptr)(#(#arg_idents),*))
+                }
             },
         },
         ImplDetails {
@@ -269,9 +281,15 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             factory_bound: "traits::PackedFn",
             call_receiver: quote! { &self },
             thunk_body: quote! {
-                let closure_ptr: *const #f_ident;
-                #crate_path::arch::_thunk_asm!(closure_ptr);
-                #crate_path::arch::_never_inline(|| (&*closure_ptr)(#(#arg_idents),*))
+                if const { ::core::mem::size_of::<#f_ident>() == 0 } {
+                    let closure: &#f_ident = unsafe { &*::core::ptr::dangling() };
+                    closure(#(#arg_idents),*)
+                }
+                else {
+                    let closure_ptr: *const #f_ident;
+                    #crate_path::arch::_thunk_asm!(closure_ptr);
+                    #crate_path::arch::_never_inline(|| (&*closure_ptr)(#(#arg_idents),*))
+                }
             },
         },
     ];

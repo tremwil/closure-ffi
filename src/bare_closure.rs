@@ -53,7 +53,7 @@ pub use closure_ffi_proc_macros::bare_hrtb as bare_hrtb_impl;
 use crate::jit_alloc::GlobalJitAlloc;
 #[allow(unused_imports)]
 use crate::{
-    arch::{create_thunk, ThunkInfo},
+    arch::AllocatedThunk,
     cc,
     jit_alloc::{JitAlloc, JitAllocError},
     traits::{Any, FnMutThunk, FnOnceThunk, FnPtr, FnThunk, ToBoxedDyn},
@@ -299,8 +299,7 @@ macro_rules! bare_closure_impl {
         /// provided the type parameters match.
         #[allow(dead_code)]
         pub struct $erased_ty_name<S: ?Sized, A: JitAlloc = GlobalJitAlloc> {
-            thunk_info: ThunkInfo,
-            jit_alloc: A,
+            thunk: AllocatedThunk<A>,
             // We can't directly own the closure, even through an UnsafeCell.
             // Otherwise, holding a reference to a BareFnMut while the bare function is
             // being called would be UB! So we reclaim the pointer in the Drop impl.
@@ -331,8 +330,7 @@ macro_rules! bare_closure_impl {
         /// provided the type parameters match.
         #[allow(dead_code)]
         pub struct $erased_ty_name<S: ?Sized, A: JitAlloc> {
-            thunk_info: ThunkInfo,
-            jit_alloc: A,
+            thunk: AllocatedThunk<A>,
             storage: *mut S,
         }
 
@@ -353,7 +351,7 @@ macro_rules! bare_closure_impl {
             #[doc = $safety_doc]
             #[inline]
             pub fn bare(self: $bare_receiver) -> *const () {
-                self.thunk_info.thunk
+                self.thunk.thunk_ptr()
             }
 
             /// Leak the underlying closure, returning the unsafe bare function pointer that invokes
@@ -371,7 +369,7 @@ macro_rules! bare_closure_impl {
             where
                 Self: 'static,
             {
-                ManuallyDrop::new(self).thunk_info.thunk
+                ManuallyDrop::new(self).thunk.thunk_ptr()
             }
 
             /// Weaken the bounds of the type-erased storage.
@@ -401,14 +399,6 @@ macro_rules! bare_closure_impl {
 
         impl<S: ?Sized, A: JitAlloc> Drop for $erased_ty_name<S, A> {
             fn drop(&mut self) {
-                // Don't panic on allocator failures for safety reasons
-                // SAFETY:
-                // - The caller of `bare()` promised not to call through the thunk after
-                // the lifetime of self expires
-                // - alloc_base is RX memory previously allocated by jit_alloc which has not been
-                // freed yet
-                unsafe { self.jit_alloc.release(self.thunk_info.alloc_base).ok() };
-
                 // Free the closure
                 // SAFETY:
                 // - The caller of `bare()` promised not to call through the thunk after
@@ -607,14 +597,17 @@ macro_rules! bare_closure_impl {
                 // SAFETY:
                 // - thunk_template pointer obtained from the correct source
                 // - `closure` is a valid pointer to `fun`
-                let thunk_info = unsafe {
-                    create_thunk(<(CC, F)>::$thunk_template, storage as *const _, &jit_alloc)?
+                let thunk = unsafe {
+                    AllocatedThunk::new(
+                        <(CC, F)>::$thunk_template,
+                        storage as *const _, size_of::<F>(),
+                        jit_alloc
+                    )?
                 };
                 Ok(Self {
                     untyped: $erased_ty_name {
-                        thunk_info,
-                        jit_alloc,
-                        storage,
+                        thunk,
+                        storage
                     },
                     phantom: PhantomData,
                 })
@@ -676,14 +669,18 @@ macro_rules! bare_closure_impl {
                 // SAFETY:
                 // - thunk_template pointer obtained from the correct source
                 // - `closure` is a valid pointer to `fun`
-                let thunk_info = unsafe {
-                    create_thunk(T::$thunk_template, storage as *const _, &jit_alloc)?
+                // - `size_of::<T>()` equals the size of the closure
+                let thunk = unsafe {
+                    AllocatedThunk::new(
+                        T::$thunk_template,
+                        storage as *const _, size_of::<T>(),
+                        jit_alloc
+                    )?
                 };
                 Ok(Self {
                     untyped: $erased_ty_name {
-                        thunk_info,
-                        jit_alloc,
-                        storage,
+                        thunk,
+                        storage
                     },
                     phantom: PhantomData,
                 })
