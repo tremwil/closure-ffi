@@ -1,25 +1,23 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [v4.1.0] - 2025-09-23
 
 ### Changed
 - Thunk generation modified to be a zero-cost abstraction: For functions items and non-capturing closures, constructing a `BareFn*` type will not allocate or emit code. Instead, it will use a compile-time template that conjures an instance of the ZST to invoke it.
+- Added changelog to the documentation.
+- Added UB warning to the documentation.
 
 ## [v4.0.0] - 2025-09-22
 
-This update adds the scaffolding required to implement "higher order" transformations on bare function thunks. For example, it is now possible to write a function that synchonizes an generic `FnMutThunk` implementation while printing its return value:
+This update adds the scaffolding required to implement "higher order" transformations on bare function thunks. For example, it is now possible to write a function that synchronizes a generic `FnMutThunk` implementation while printing its return value:
 
-```rs
-use closure_ffi::{thunk_factory, traits::{FnPtr, FnThunk, FnMutThunk}};
+```rust
+use closure_ffi::{thunk_factory, cc, traits::{FnPtr, FnThunk, FnMutThunk}};
 
+#[cfg(feature = "std")]
 fn lock_and_debug<B: FnPtr, F: Send>(fun: F) -> impl FnThunk<B> + Sync
 where
-    for<'a, 'b, 'c> B::Ret<'a, 'b, 'c>: core::fmt::Debug,
+    for<'a, 'b, 'c> B::Ret<'a, 'b, 'c>: std::fmt::Debug,
     (cc::C, F): FnMutThunk<B>,
 {
     let locked = std::sync::Mutex::new((cc::C, fun));

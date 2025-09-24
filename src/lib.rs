@@ -7,6 +7,7 @@
 #![cfg_attr(feature = "c_variadic", feature(c_variadic))]
 #![cfg_attr(feature = "coverage", feature(coverage_attribute))]
 #![doc = include_str!("../README.md")]
+#![cfg_attr(doc, doc = include_str!("../CHANGELOG.md"))]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
