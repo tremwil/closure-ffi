@@ -43,6 +43,7 @@
 //!   against unsynchronized calls.
 //! - for [`BareFnAny`]: When the closure is [`Sync`].
 
+use alloc::boxed::Box;
 use core::{marker::PhantomData, mem::ManuallyDrop};
 
 #[cfg(feature = "proc_macros")]
@@ -57,7 +58,6 @@ use crate::{
     cc,
     jit_alloc::{JitAlloc, JitAllocError},
     traits::{Any, FnMutThunk, FnOnceThunk, FnPtr, FnThunk, ToBoxedDyn},
-    Box,
 };
 
 #[cfg(not(feature = "coverage"))]
