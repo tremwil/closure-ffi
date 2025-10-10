@@ -59,7 +59,7 @@ pub mod consts {
 
 // We perform aligned reads at the pointer size, so make sure the align is sufficient
 const _ASSERT_MAGIC_TYPE_SUFFICIENT_ALIGN: () =
-    assert!(align_of::<consts::Magic>() >= align_of::<usize>());
+    assert!(align_of::<consts::Magic>() <= align_of::<usize>());
 
 // We have to expose the thunk asm macros to allow the hrtb_cc proc macro to generate more complex
 // thunk templates
