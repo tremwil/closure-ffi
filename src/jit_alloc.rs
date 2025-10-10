@@ -194,7 +194,7 @@ mod default_jit_alloc {
     static GLOBAL_JIT_ALLOC: spin::Mutex<Option<alloc::boxed::Box<JitAllocator>>> =
         spin::Mutex::new(None);
     #[cfg(feature = "std")]
-    static GLOBAL_JIT_ALLOC: std::sync::Mutex<Option<Box<JitAllocator>>> =
+    static GLOBAL_JIT_ALLOC: std::sync::Mutex<Option<alloc::boxed::Box<JitAllocator>>> =
         std::sync::Mutex::new(None);
 
     impl super::GlobalJitAlloc {
@@ -238,6 +238,7 @@ mod default_jit_alloc {
     #[cfg(feature = "std")]
     pub(super) mod thread_jit_alloc {
         use core::{cell::UnsafeCell, marker::PhantomData};
+        use std::{boxed::Box, thread_local};
 
         use jit_allocator2::JitAllocator;
 
