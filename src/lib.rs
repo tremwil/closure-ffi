@@ -1,6 +1,6 @@
+#![no_std]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "unstable", feature(unsize))]
 #![cfg_attr(feature = "unstable", feature(ptr_metadata))]
 #![cfg_attr(feature = "tuple_trait", feature(tuple_trait))]
@@ -9,14 +9,10 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(doc, doc = include_str!("../CHANGELOG.md"))]
 
-#[cfg(not(feature = "std"))]
 extern crate alloc;
 
-// Provide a no_std agnostic `Box` import for other modules
-#[cfg(not(feature = "std"))]
-pub(crate) use alloc::boxed::Box;
 #[cfg(feature = "std")]
-pub(crate) use std::boxed::Box;
+extern crate std;
 
 #[doc(hidden)]
 pub mod arch;

@@ -1,6 +1,6 @@
 //! Traits that `closure-ffi` uses to power its functionality.
 
-use crate::Box;
+use alloc::boxed::Box;
 
 /// Dummy trait implemented by every type.
 ///
