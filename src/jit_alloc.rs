@@ -102,7 +102,7 @@ impl<J: JitAlloc> JitAlloc for std::sync::LazyLock<J> {
     }
 }
 
-#[cfg(feature = "spin")]
+#[cfg(feature = "default_jit_alloc")]
 impl<J: JitAlloc, R: spin::RelaxStrategy> JitAlloc for spin::lazy::Lazy<J, fn() -> J, R> {
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
         self.deref().alloc(size)
