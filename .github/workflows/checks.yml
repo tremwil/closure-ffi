@@ -21,8 +21,8 @@ jobs:
       fail-fast: false
       matrix:
         features:
-          - --no-default-features -F spin
-          - --no-default-features -F spin,global_jit_alloc
+          - --no-default-features
+          - --no-default-features -F global_jit_alloc
           - --no-default-features -F std,global_jit_alloc
           - ""
           - -F proc_macros
@@ -70,7 +70,7 @@ jobs:
         features:
           - "-F proc_macros"
           - "-F tuple_trait,c_variadic,coverage"
-          - "--no-default-features -F spin,global_jit_alloc"
+          - "--no-default-features -F global_jit_alloc"
         profile:
           - dev
           - release
