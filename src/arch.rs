@@ -23,6 +23,7 @@ pub mod consts {
     mod inner {
         pub const THUNK_EXTRA_SIZE: isize = -4;
         pub const CLOSURE_ADDR_OFFSET: isize = -15;
+        pub const THUNK_CODE_OFFSET: isize = -16;
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -32,7 +33,7 @@ pub mod consts {
         pub const CLOSURE_ADDR_OFFSET: isize = 0;
     }
 
-    pub(super) use inner::*;
+    pub(crate) use inner::*;
 }
 
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
@@ -59,7 +60,7 @@ pub mod consts {
 
 // We perform aligned reads at the pointer size, so make sure the align is sufficient
 const _ASSERT_MAGIC_TYPE_SUFFICIENT_ALIGN: () =
-    assert!(align_of::<consts::Magic>() <= align_of::<usize>());
+    assert!(align_of::<consts::Magic>() >= align_of::<usize>());
 
 // We have to expose the thunk asm macros to allow the hrtb_cc proc macro to generate more complex
 // thunk templates
@@ -181,6 +182,9 @@ impl<J: JitAlloc> AllocatedThunk<J> {
     /// Note that if the closure is a ZST, no JIT allocation occurs as the thunk template is a valid
     /// thunk for all instances of the closure.
     ///
+    /// # Panics
+    /// If the `safe_jit` feature is enabled and the thunk template prologue cannot be relocated.
+    ///
     /// # Safety
     /// Given a closure of type `F`, the following must hold:
     /// - `size_of::<F>() == closure_size`.
@@ -192,7 +196,7 @@ impl<J: JitAlloc> AllocatedThunk<J> {
     /// - `closure_ptr` is a valid pointer to an initialized instance of `F` (note: may be dandling
     ///   if `F` is a ZST!).
     pub unsafe fn new(
-        thunk_template: *const u8,
+        thunk_template_ptr: *const u8,
         closure_ptr: *const (),
         closure_size: usize,
         jit: J,
@@ -200,7 +204,7 @@ impl<J: JitAlloc> AllocatedThunk<J> {
         if closure_size == 0 {
             return Ok(AllocatedThunk {
                 alloc_base: core::ptr::null(),
-                thunk: thunk_template.cast(),
+                thunk: thunk_template_ptr.cast(),
                 jit,
             });
         }
@@ -209,30 +213,41 @@ impl<J: JitAlloc> AllocatedThunk<J> {
 
         // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
         #[cfg(thumb_mode)]
-        let thunk_template = thunk_template.map_addr(|a| a & !1);
+        let thunk_template_ptr = thunk_template_ptr.map_addr(|a| a & !1);
 
         // Align to pointer size and search for the magic number to be replaced by the
         // closure address
-        let mut offset = thunk_template.align_offset(MAGIC_ALIGN);
-        while thunk_template.add(offset).cast::<consts::Magic>().read()
+        let mut template_magic_offset = thunk_template_ptr.align_offset(MAGIC_ALIGN);
+        while thunk_template_ptr.add(template_magic_offset).cast::<consts::Magic>().read()
             != consts::CLOSURE_ADDR_MAGIC
         {
-            offset += MAGIC_ALIGN;
+            template_magic_offset += MAGIC_ALIGN;
         }
-        let thunk_size = offset.wrapping_add_signed(consts::THUNK_EXTRA_SIZE);
+
+        let template_size = template_magic_offset.wrapping_add_signed(consts::THUNK_EXTRA_SIZE);
+        let thunk_template =
+            unsafe { core::slice::from_raw_parts(thunk_template_ptr, template_size) };
+
+        #[cfg(feature = "safe_jit")]
+        let thunk = crate::safe_jit::reloc_thunk_template(
+            thunk_template,
+            thunk_template_ptr as usize as u64,
+            template_magic_offset,
+        );
+        let magic_offset = template_magic_offset + thunk.len() - template_size;
 
         // Skip initial bytes for proper alignment
-        let (rx, rw) = jit.alloc(thunk_size + MAGIC_ALIGN - 1)?;
-        let align_offset = rw.add(offset).align_offset(MAGIC_ALIGN);
+        let (rx, rw) = jit.alloc(thunk.len() + MAGIC_ALIGN - 1)?;
+        let align_offset = rw.add(magic_offset).align_offset(MAGIC_ALIGN);
         let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
 
-        jit.protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadWrite);
+        jit.protect_jit_memory(thunk_rx, thunk.len(), ProtectJitAccess::ReadWrite);
 
         // Copy the prologue + asm block from the compiler-generated thunk
-        core::ptr::copy_nonoverlapping(thunk_template, rw, thunk_size);
+        core::ptr::copy_nonoverlapping(thunk.as_ptr(), rw, thunk.len());
 
         // Write the closure pointer
-        rw.add(offset.wrapping_add_signed(consts::CLOSURE_ADDR_OFFSET))
+        rw.add(magic_offset.wrapping_add_signed(consts::CLOSURE_ADDR_OFFSET))
             .cast::<*const ()>()
             .write_unaligned(closure_ptr);
 
@@ -240,15 +255,18 @@ impl<J: JitAlloc> AllocatedThunk<J> {
         #[cfg(not(target_arch = "x86"))]
         {
             // Write the jump back to the compiler-generated thunk
-            let thunk_return = thunk_template.add(offset + consts::THUNK_RETURN_OFFSET);
+            let thunk_return =
+                thunk_template_ptr.add(template_magic_offset + consts::THUNK_RETURN_OFFSET);
             // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
             #[cfg(thumb_mode)]
             let thunk_return = thunk_return.map_addr(|a| a | 1);
-            rw.add(offset + size_of::<usize>()).cast::<*const u8>().write(thunk_return);
+            rw.add(magic_offset + size_of::<usize>())
+                .cast::<*const u8>()
+                .write(thunk_return);
         }
 
-        jit.protect_jit_memory(thunk_rx, thunk_size, ProtectJitAccess::ReadExecute);
-        jit.flush_instruction_cache(thunk_rx, thunk_size);
+        jit.protect_jit_memory(thunk_rx, thunk.len(), ProtectJitAccess::ReadExecute);
+        jit.flush_instruction_cache(thunk_rx, thunk.len());
 
         // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
         #[cfg(thumb_mode)]
@@ -262,17 +280,26 @@ impl<J: JitAlloc> AllocatedThunk<J> {
     }
 }
 
-/// Runs the provided closure and returns the result. Guaranteed to not inline its code.
+/// Runs the provided closure and returns the result.
 ///
-/// Necessary to prevent the compiler inlining a closure call into the
-/// compiler thunk function, which may bring in some PC-relative static constant loads
-/// in the prologue on some architectures (namely arm/aarch64).
+/// Depending on the enabled features and architecture, it may be necessary to prevent the compiler
+/// from inlining a closure call into the compiler thunk function, which may bring in some
+/// PC-relative static constant loads in the prologue on some architectures (namely arm/aarch64).
+/// This function controls this behavior.
 #[doc(hidden)]
+#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), feature = "safe_jit")))]
 #[inline(never)]
-pub fn _never_inline<R>(f: impl FnOnce() -> R) -> R {
+pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
     // Empty asm block is not declared as pure, so may have side-effects
     // Necessary to make inline(never) actually work
-    unsafe { core::arch::asm!("") }
+    unsafe { core::arch::asm!("", options(nostack)) }
+    f()
+}
+
+#[doc(hidden)]
+#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), feature = "safe_jit"))]
+#[inline(always)]
+pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
     f()
 }
 

@@ -248,7 +248,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
                 else {
                     let closure_ptr: *mut #f_ident;
                     #crate_path::arch::_thunk_asm!(closure_ptr);
-                    #crate_path::arch::_never_inline(|| closure_ptr.read()(#(#arg_idents),*))
+                    #crate_path::arch::_invoke(|| closure_ptr.read()(#(#arg_idents),*))
                 }
             },
         },
@@ -268,7 +268,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
                 else {
                     let closure_ptr: *mut #f_ident;
                     #crate_path::arch::_thunk_asm!(closure_ptr);
-                    #crate_path::arch::_never_inline(|| (&mut *closure_ptr)(#(#arg_idents),*))
+                    #crate_path::arch::_invoke(|| (&mut *closure_ptr)(#(#arg_idents),*))
                 }
             },
         },
@@ -288,7 +288,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
                 else {
                     let closure_ptr: *const #f_ident;
                     #crate_path::arch::_thunk_asm!(closure_ptr);
-                    #crate_path::arch::_never_inline(|| (&*closure_ptr)(#(#arg_idents),*))
+                    #crate_path::arch::_invoke(|| (&*closure_ptr)(#(#arg_idents),*))
                 }
             },
         },

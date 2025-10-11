@@ -14,6 +14,9 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(feature = "safe_jit")]
+mod safe_jit;
+
 #[doc(hidden)]
 pub mod arch;
 

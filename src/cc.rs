@@ -71,7 +71,7 @@ macro_rules! cc_thunk_impl_triple {
                     else {
                         let closure_ptr: *mut F;
                         $crate::arch::_thunk_asm!(closure_ptr);
-                        $crate::arch::_never_inline(|| closure_ptr.read()($($args),*))
+                        $crate::arch::_invoke(|| closure_ptr.read()($($args),*))
                     }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
@@ -100,7 +100,7 @@ macro_rules! cc_thunk_impl_triple {
                     else {
                         let closure_ptr: *mut F;
                         $crate::arch::_thunk_asm!(closure_ptr);
-                        $crate::arch::_never_inline(|| (&mut *closure_ptr)($($args),*))
+                        $crate::arch::_invoke(|| (&mut *closure_ptr)($($args),*))
                     }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
@@ -130,7 +130,7 @@ macro_rules! cc_thunk_impl_triple {
                     else {
                         let closure_ptr: *const F;
                         $crate::arch::_thunk_asm!(closure_ptr);
-                        $crate::arch::_never_inline(|| (&*closure_ptr)($($args),*))
+                        $crate::arch::_invoke(|| (&*closure_ptr)($($args),*))
                     }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
@@ -385,7 +385,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
                     else {
                         let closure_ptr: *mut F;
                         $crate::arch::_thunk_asm!(closure_ptr);
-                        $crate::arch::_never_inline(|| closure_ptr.read()($($args,)* va_args))
+                        $crate::arch::_invoke(|| closure_ptr.read()($($args,)* va_args))
                     }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
@@ -420,7 +420,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
                     else {
                         let closure_ptr: *mut F;
                         $crate::arch::_thunk_asm!(closure_ptr);
-                        $crate::arch::_never_inline(|| (&mut *closure_ptr)($($args,)* va_args))
+                        $crate::arch::_invoke(|| (&mut *closure_ptr)($($args,)* va_args))
                     }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
@@ -455,7 +455,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
                     else {
                         let closure_ptr: *const F;
                         $crate::arch::_thunk_asm!(closure_ptr);
-                        $crate::arch::_never_inline(|| (&*closure_ptr)($($args,)* va_args))
+                        $crate::arch::_invoke(|| (&*closure_ptr)($($args,)* va_args))
                     }
                 }
                 thunk::<F, R, $($tys),*> as *const u8
