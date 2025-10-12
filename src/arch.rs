@@ -4,6 +4,8 @@
 //! While parts of this module are public for macro reasons, they should not be used directly.
 
 use crate::jit_alloc::{JitAlloc, JitAllocError, ProtectJitAccess};
+#[cfg(feature = "safe_jit")]
+use crate::safe_jit::RelocThunk;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[doc(hidden)]
@@ -228,13 +230,18 @@ impl<J: JitAlloc> AllocatedThunk<J> {
         let thunk_template =
             unsafe { core::slice::from_raw_parts(thunk_template_ptr, template_size) };
 
+        #[cfg(not(feature = "safe_jit"))]
+        let (thunk, magic_offset) = (thunk_template, template_magic_offset);
+
         #[cfg(feature = "safe_jit")]
-        let thunk = crate::safe_jit::reloc_thunk_template(
+        let RelocThunk {
+            thunk,
+            magic_offset,
+        } = crate::safe_jit::reloc_thunk_template(
             thunk_template,
             thunk_template_ptr as usize as u64,
             template_magic_offset,
         );
-        let magic_offset = template_magic_offset + thunk.len() - template_size;
 
         // Skip initial bytes for proper alignment
         let (rx, rw) = jit.alloc(thunk.len() + MAGIC_ALIGN - 1)?;

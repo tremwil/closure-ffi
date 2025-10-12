@@ -5,14 +5,14 @@ use iced_x86::{
     InstructionInfoOptions, OpAccess, Register,
 };
 
-use super::RelocError;
+use super::JitError;
 use crate::arch::consts;
 
 pub fn try_reloc_thunk_template<'a>(
     thunk_template: &'a [u8],
     ip: u64,
     magic_offset: usize,
-) -> Result<Cow<'a, [u8]>, RelocError> {
+) -> Result<Cow<'a, [u8]>, JitError> {
     let mut decoder = Decoder::with_ip(64, thunk_template, ip, DecoderOptions::NONE);
 
     let mut instructions = Vec::new();
@@ -24,10 +24,10 @@ pub fn try_reloc_thunk_template<'a>(
         decoder.decode_out(&mut instruction);
 
         if instruction.is_invalid() {
-            return Err(RelocError::InvalidInstruction);
+            return Err(JitError::InvalidInstruction);
         }
         else if instruction.flow_control() != FlowControl::Next {
-            return Err(RelocError::UnsupportedControlFlow);
+            return Err(JitError::UnsupportedControlFlow);
         }
 
         let needs_reloc = instruction.is_ip_rel_memory_operand();
@@ -44,7 +44,7 @@ pub fn try_reloc_thunk_template<'a>(
         instructions.push((instruction, needs_reloc));
     }
 
-    let thunk_asm_offset = thunk_asm_offset.ok_or(RelocError::NoThunkAsm)?;
+    let thunk_asm_offset = thunk_asm_offset.ok_or(JitError::NoThunkAsm)?;
     if num_ip_rel_reloc == 0 {
         return Ok(Cow::Borrowed(thunk_template));
     }
@@ -92,7 +92,7 @@ pub fn try_reloc_thunk_template<'a>(
             let Some(i_avail_gpr) =
                 gpr_ops.iter().position(|&op| matches!(op, GprOp::Write(w) if w >= i))
             else {
-                return Err(RelocError::NoAvailableRegister);
+                return Err(JitError::NoAvailableRegister);
             };
             chosen_registers.push(Register::RAX + i_avail_gpr as u32)
         }
@@ -113,12 +113,12 @@ pub fn try_reloc_thunk_template<'a>(
 
             // cannot fail as register is a 64-bit gpr
             let mov = Instruction::with2(Code::Mov_r64_imm64, register, address).unwrap();
-            encoder.encode(&mov, 0).map_err(|_| RelocError::EncodingError)?;
+            encoder.encode(&mov, 0).map_err(|_| JitError::EncodingError)?;
 
             instr.set_memory_base(register);
             instr.set_memory_index(Register::None); // shouldn't be necessary
             instr.set_memory_displacement64(0);
-            encoder.encode(&instr, 0).map_err(|_| RelocError::EncodingError)?;
+            encoder.encode(&instr, 0).map_err(|_| JitError::EncodingError)?;
         }
         else {
             let mut buffer = encoder.take_buffer();

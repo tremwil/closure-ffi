@@ -2,37 +2,37 @@ use alloc::{borrow::Cow, vec::Vec};
 
 use iced_x86::{Code, Decoder, DecoderOptions, Encoder, FlowControl, Instruction, Register};
 
-use super::RelocError;
+use super::JitError;
 use crate::arch::consts;
+
+struct CallPop {
+    offset: usize,
+    len: usize,
+    target_ip: u32,
+    register: Register,
+}
 
 pub fn try_reloc_thunk_template<'a>(
     thunk_template: &'a [u8],
     ip: u64,
     magic_offset: usize,
-) -> Result<Cow<'a, [u8]>, RelocError> {
+) -> Result<Cow<'a, [u8]>, JitError> {
     let mut decoder = Decoder::with_ip(32, thunk_template, ip, DecoderOptions::NONE);
 
     let mut instruction = Instruction::default();
-    let mut thunk_asm_offset = None;
-
-    struct CallPop {
-        offset: usize,
-        len: usize,
-        target_ip: u32,
-        register: Register,
-    }
+    let mut reached_thunk_asm = false;
     let mut call_pops = Vec::new();
 
     while decoder.can_decode() {
         let offset = decoder.position();
         if offset == magic_offset.wrapping_add_signed(consts::THUNK_CODE_OFFSET) {
-            thunk_asm_offset = Some(decoder.position());
+            reached_thunk_asm = true;
             break;
         }
 
         decoder.decode_out(&mut instruction);
         if instruction.is_invalid() {
-            return Err(RelocError::InvalidInstruction);
+            return Err(JitError::InvalidInstruction);
         }
 
         if instruction.flow_control() != FlowControl::Next {
@@ -53,15 +53,15 @@ pub fn try_reloc_thunk_template<'a>(
                 }
             }
 
-            return Err(RelocError::UnsupportedControlFlow);
+            return Err(JitError::UnsupportedControlFlow);
         }
     }
 
-    if thunk_asm_offset.is_none() {
-        return Err(RelocError::NoThunkAsm);
+    if !reached_thunk_asm {
+        return Err(JitError::NoThunkAsm);
     }
 
-    if call_pops.len() == 0 {
+    if call_pops.is_empty() {
         return Ok(Cow::Borrowed(thunk_template));
     }
 
@@ -84,7 +84,7 @@ pub fn try_reloc_thunk_template<'a>(
         // can't panic (register is from a pop r32 and is thus a 32-bit gpr)
         let mov =
             Instruction::with2(Code::Mov_r32_imm32, call_pop.register, call_pop.target_ip).unwrap();
-        encoder.encode(&mov, 0).map_err(|_| RelocError::EncodingError)?;
+        encoder.encode(&mov, 0).map_err(|_| JitError::EncodingError)?;
     }
 
     // write the remaining slice
