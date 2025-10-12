@@ -1,5 +1,7 @@
 use alloc::borrow::Cow;
 
+mod util;
+
 #[cfg(target_arch = "x86_64")]
 mod x86_64;
 #[cfg(target_arch = "x86_64")]
@@ -22,7 +24,7 @@ use arm::try_reloc_thunk_template;
 
 #[derive(Clone, Copy, Debug)]
 #[allow(unused)]
-enum RelocError {
+enum JitError {
     InvalidInstruction,
     UnsupportedControlFlow,
     NoAvailableRegister,
@@ -30,13 +32,22 @@ enum RelocError {
     NoThunkAsm,
 }
 
+pub struct RelocThunk<'a> {
+    pub thunk: Cow<'a, [u8]>,
+    pub magic_offset: usize,
+}
+
 /// Relocates the prologue including the thunk_asm, doing sanity checks on the code.
 ///
 /// # Panics
 /// If the relocation would lead to broken code.
-pub fn reloc_thunk_template<'a>(prologue: &'a [u8], ip: u64, magic_offset: usize) -> Cow<'a, [u8]> {
-    return try_reloc_thunk_template(prologue, ip, magic_offset).expect(
+pub fn reloc_thunk_template<'a>(
+    prologue: &'a [u8],
+    ip: u64,
+    magic_offset: usize,
+) -> RelocThunk<'a> {
+    try_reloc_thunk_template(prologue, ip, magic_offset).expect(
         "failed to relocate thunk template prologue. \
         This is a bug, please report it and include your binary with debug info if possible",
-    );
+    )
 }
