@@ -321,18 +321,18 @@ pub use default_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
     doc(cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc"))))
 )]
 macro_rules! global_jit_alloc {
-    ($static_var:path) => {
-        #[no_mangle]
-        extern "Rust" fn _closure_ffi_3_global_jit_alloc(
-        ) -> &'static (dyn $crate::jit_alloc::JitAlloc + Sync) {
-            &$static_var
-        }
-    };
     (unsafe $provider:block) => {
         #[no_mangle]
         extern "Rust" fn _closure_ffi_3_global_jit_alloc(
         ) -> &'static (dyn $crate::jit_alloc::JitAlloc + Sync) {
             unsafe { $provider }
+        }
+    };
+    ($static_var:path) => {
+        #[no_mangle]
+        extern "Rust" fn _closure_ffi_3_global_jit_alloc(
+        ) -> &'static (dyn $crate::jit_alloc::JitAlloc + Sync) {
+            &$static_var
         }
     };
 }
