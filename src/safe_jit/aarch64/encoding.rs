@@ -21,7 +21,7 @@ bitflags! {
         pub reg set_reg try_set_reg: 0..5,
         #[signed(i32)]
         pub imm set_imm try_set_imm: 5..24,
-        fixed set_fixed: 24..29,
+        fixed set_fixed: 24..30,
         opc_raw set_opc_raw: 30..32
     }
 }
@@ -107,10 +107,10 @@ impl Adr {
         let signed_imm = ((unsigned_imm << 12) as i32 >> 12) as i64;
 
         if self.is_adrp() {
-            (pc & 0xFFF).wrapping_add_signed(signed_imm * 0x1000)
+            (pc & !0xFFF).wrapping_add_signed(signed_imm * 0x1000)
         }
         else {
-            pc.wrapping_add_signed(signed_imm * 4)
+            pc.wrapping_add_signed(signed_imm)
         }
     }
 }
@@ -211,7 +211,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ldr_imm() {
+    fn aarch64_encoding_ldr_imm() {
         struct Case {
             opc: LdrImmOpc,
             reg: u32,
@@ -251,6 +251,128 @@ mod tests {
             assert_eq!(ldr.imm(), case.imm);
 
             let encoded = LdrImm::new(case.opc, case.reg, case.imm).expect("encoding failure");
+            assert_eq!(encoded.to_raw(), case.expected)
+        }
+    }
+
+    #[test]
+    fn aarch64_encoding_adr() {
+        struct Case {
+            is_adrp: bool,
+            reg: u32,
+            pc: u64,
+            target: u64,
+            expected: u32,
+        }
+        impl Case {
+            pub const fn new(
+                is_adrp: bool,
+                reg: u32,
+                pc: u64,
+                target: u64,
+                expected: &'static [u8; 4],
+            ) -> Self {
+                Case {
+                    is_adrp,
+                    reg,
+                    pc,
+                    target,
+                    expected: u32::from_le_bytes(*expected),
+                }
+            }
+        }
+
+        const CASES: &[Case] = &[
+            Case::new(false, 3, 0x1000, 0x2000, b"\x03\x80\x00\x10"),
+            Case::new(false, 4, 0x2000, 0x1000, b"\x04\x80\xff\x10"),
+            Case::new(true, 5, 0x2000, 0x5000, b"\x05\x00\x00\xf0"),
+            Case::new(true, 5, 0x2300, 0x5000, b"\x05\x00\x00\xf0"),
+            Case::new(true, 5, 0x5100, 0x2000, b"\xe5\xff\xff\xb0"),
+        ];
+
+        for case in CASES {
+            let adr = Adr::from_raw(case.expected);
+
+            assert!(adr.assert_opcode());
+            assert_eq!(adr.is_adrp(), case.is_adrp);
+            assert_eq!(adr.reg(), case.reg);
+            assert_eq!(adr.target_pc(case.pc), case.target);
+        }
+    }
+
+    #[test]
+    fn aarch64_encoding_branch() {
+        struct Case {
+            pc: u64,
+            target: u64,
+            expected: u32,
+        }
+        impl Case {
+            pub const fn new(pc: u64, target: u64, expected: &'static [u8; 4]) -> Self {
+                Case {
+                    pc,
+                    target,
+                    expected: u32::from_le_bytes(*expected),
+                }
+            }
+        }
+
+        const CASES: &[Case] = &[
+            Case::new(0x1000, 0x2000, b"\x00\x04\x00\x14"),
+            Case::new(0x2000, 0x1000, b"\x00\xfc\xff\x17"),
+        ];
+
+        for case in CASES {
+            let b = Branch::from_raw(case.expected);
+
+            assert!(b.assert_opcode());
+            assert_eq!(b.target_pc(case.pc), case.target);
+        }
+    }
+
+    #[test]
+    fn aarch64_encoding_ldr_ofs() {
+        struct Case {
+            opc: LdrImmOpc,
+            reg_dest: u32,
+            reg_base: u32,
+            disp: u32,
+            expected: u32,
+        }
+        impl Case {
+            pub const fn new(
+                opc: LdrImmOpc,
+                reg_dest: u32,
+                reg_base: u32,
+                disp: u32,
+                expected: &'static [u8; 4],
+            ) -> Self {
+                Case {
+                    opc,
+                    reg_dest,
+                    reg_base,
+                    disp,
+                    expected: u32::from_le_bytes(*expected),
+                }
+            }
+        }
+
+        const CASES: &[Case] = &[
+            Case::new(LdrImmOpc::Load64, 3, 4, 0x100, b"\x83\x80\x40\xf9"),
+            Case::new(LdrImmOpc::Load32, 3, 4, 0x100, b"\x83\x00\x41\xb9"),
+            Case::new(LdrImmOpc::Load32Sx, 3, 4, 0x100, b"\x83\x00\x81\xb9"),
+            Case::new(LdrImmOpc::Prefetch, 0, 3, 0x200, b"\x60\x00\x81\xf9"),
+        ];
+
+        for case in CASES {
+            let ldr = LdrOfs::from_raw(case.expected);
+
+            assert_eq!(ldr.reg_dest(), case.reg_dest);
+            assert_eq!(ldr.reg_base(), case.reg_base);
+            assert_eq!(ldr.disp(), case.disp);
+
+            let encoded = LdrOfs::new(case.opc, case.reg_dest, case.reg_base, case.disp)
+                .expect("encoding failure");
             assert_eq!(encoded.to_raw(), case.expected)
         }
     }
