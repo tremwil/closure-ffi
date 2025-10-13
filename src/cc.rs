@@ -63,6 +63,7 @@ macro_rules! cc_thunk_impl_triple {
         {
             const THUNK_TEMPLATE_ONCE: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
+                #[allow(clippy::too_many_arguments)]
                 unsafe extern $cconv_lit fn thunk<F: FnOnce($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     if const { core::mem::size_of::<F>() == 0 } {
                         let fun: F = unsafe { core::mem::zeroed() };
@@ -92,6 +93,7 @@ macro_rules! cc_thunk_impl_triple {
         {
             const THUNK_TEMPLATE_MUT: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
+                #[allow(clippy::too_many_arguments)]
                 unsafe extern $cconv_lit fn thunk<F: FnMut($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     if const { core::mem::size_of::<F>() == 0 } {
                         let fun: &mut F = unsafe { &mut *core::ptr::dangling_mut() };
@@ -122,6 +124,7 @@ macro_rules! cc_thunk_impl_triple {
         {
             const THUNK_TEMPLATE: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
+                #[allow(clippy::too_many_arguments)]
                 unsafe extern $cconv_lit fn thunk<F: Fn($($tys),*) -> R, R, $($id_tys),*>($($args: $tys),*) -> R {
                     if const { core::mem::size_of::<F>() == 0 } {
                         let fun: &F = unsafe { &*core::ptr::dangling_mut() };
