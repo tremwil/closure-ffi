@@ -1,8 +1,8 @@
-use alloc::{borrow::Cow, vec::Vec};
+use alloc::vec::Vec;
 
 use iced_x86::{Code, Decoder, DecoderOptions, Encoder, FlowControl, Instruction, Register};
 
-use super::JitError;
+use super::{JitError, RelocThunk};
 use crate::arch::consts;
 
 struct CallPop {
@@ -16,7 +16,7 @@ pub fn try_reloc_thunk_template<'a>(
     thunk_template: &'a [u8],
     ip: u64,
     magic_offset: usize,
-) -> Result<Cow<'a, [u8]>, JitError> {
+) -> Result<RelocThunk<'a>, JitError> {
     let mut decoder = Decoder::with_ip(32, thunk_template, ip, DecoderOptions::NONE);
 
     let mut instruction = Instruction::default();
@@ -62,7 +62,10 @@ pub fn try_reloc_thunk_template<'a>(
     }
 
     if call_pops.is_empty() {
-        return Ok(Cow::Borrowed(thunk_template));
+        return Ok(RelocThunk {
+            thunk: thunk_template.into(),
+            magic_offset,
+        });
     }
 
     // note: this is less than the minimum required by a call+pop (6 bytes), assuming no prefixes
@@ -91,5 +94,8 @@ pub fn try_reloc_thunk_template<'a>(
     let mut new_bytes = encoder.take_buffer();
     new_bytes.extend_from_slice(&thunk_template[offset..]);
 
-    Ok(Cow::Owned(new_bytes))
+    Ok(RelocThunk {
+        magic_offset: magic_offset + new_bytes.len() - thunk_template.len(),
+        thunk: new_bytes.into(),
+    })
 }
