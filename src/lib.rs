@@ -1,5 +1,4 @@
 #![no_std]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(feature = "unstable", feature(unsize))]
 #![cfg_attr(feature = "unstable", feature(ptr_metadata))]
