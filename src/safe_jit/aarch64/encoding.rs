@@ -41,6 +41,7 @@ impl LdrImm {
         ins.assert_opcode().then_some(ins).ok_or(())
     }
 
+    #[allow(unused)]
     pub fn new_at(pc: u64, opc: LdrImmOpc, reg: u32, target: u64) -> Result<Self, Error> {
         let diff = target as i64 - pc as i64;
         if diff % 4 != 0 {
@@ -138,6 +139,7 @@ impl Branch {
         pc.wrapping_add_signed(self.imm() as i64 * 4)
     }
 
+    #[allow(unused)]
     pub fn try_set_target_pc(&mut self, pc: u64, target: u64) -> Result<(), ()> {
         let diff = target as i64 - pc as i64;
         if diff % 4 != 0 {
@@ -191,6 +193,7 @@ impl LdrOfs {
         Ok(ins)
     }
 
+    #[allow(unused)]
     pub fn disp(&self) -> u32 {
         self.disp_raw() << self.scale()
     }
