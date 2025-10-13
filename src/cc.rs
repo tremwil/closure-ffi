@@ -226,6 +226,15 @@ macro_rules! cc_impl {
     };
 }
 
+/// Marker type representing the Rust calling convention.
+///
+/// Note that since Rust has no stable ABI, it may change across compiler versions. Although
+/// unlikely, it is even allowed to change between compiler invocations. Do not rely on "Rust" bare
+/// functions from different binaries to be ABI compatible.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Rust;
+cc_trait_impl!(Rust, "Rust", cc_thunk_impl_triple);
+
 cc_impl!(C, "C");
 cc_impl!(CUnwind, "C-unwind");
 
@@ -242,37 +251,25 @@ cc_impl!(
 cc_impl!(Aapcs, "aapcs", target_arch = "arm");
 cc_impl!(AapcsUnwind, "aapcs-unwind", target_arch = "arm");
 
-cc_impl!(
-    Fastcall,
-    "fastcall",
-    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
-);
+cc_impl!(Fastcall, "fastcall", all(windows, target_arch = "x86"));
 cc_impl!(
     FastcallUnwind,
     "fastcall-unwind",
-    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+    all(windows, target_arch = "x86")
 );
 
-cc_impl!(
-    Stdcall,
-    "stdcall",
-    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
-);
+cc_impl!(Stdcall, "stdcall", all(windows, target_arch = "x86"));
 cc_impl!(
     StdcallUnwind,
     "stdcall-unwind",
-    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+    all(windows, target_arch = "x86")
 );
 
-cc_impl!(
-    Cdecl,
-    "cdecl",
-    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
-);
+cc_impl!(Cdecl, "cdecl", all(windows, target_arch = "x86"));
 cc_impl!(
     CdeclUnwind,
     "cdecl-unwind",
-    all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+    all(windows, target_arch = "x86")
 );
 
 cc_impl!(Thiscall, "thiscall", all(windows, target_arch = "x86"));
