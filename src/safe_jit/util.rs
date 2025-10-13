@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 // for the bitflags debug impl
 pub(crate) struct FmtAll<T>(pub T);
 impl<T: ::core::fmt::Display + ::core::fmt::LowerHex + ::core::fmt::Binary> ::core::fmt::Debug
@@ -125,5 +127,4 @@ macro_rules! bitflags_field {
 }
 
 pub(crate) use bitflags;
-#[allow(unused)]
 pub(crate) use bitflags_field;
