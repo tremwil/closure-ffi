@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: RUSTFLAGS="--cfg docsrs" cargo +nightly doc -F proc_macros
+      - run: RUSTFLAGS="--cfg docsrs" cargo +nightly doc --no-deps -F proc_macros
 
   build_and_test:
     name: Build and test
