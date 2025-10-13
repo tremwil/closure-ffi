@@ -2,3 +2,4 @@
 .vscode
 __pycache__
 rust-toolchain.toml
+qemu_test*

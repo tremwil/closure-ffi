@@ -128,12 +128,12 @@ pub fn try_reloc_thunk_template<'a>(
     let cs = Capstone::new().arm64().mode(ArchMode::Arm).detail(true).build().unwrap();
     let mut disasm_iter = cs.disasm_iter(thunk_template, pc).unwrap();
 
-    let mut extra_ldrs = Vec::new();
     let mut magic_offset_shift = 0;
+    let mut has_thunk_asm = false;
 
+    let mut extra_ldrs = Vec::new();
     let mut recoder = LazyRecoder::new(thunk_template);
 
-    let mut has_thunk_asm = false;
     while let Some(instr) = disasm_iter.next() {
         let instr_pc = instr.address();
         let offset = (instr_pc - pc) as usize;
@@ -174,7 +174,8 @@ pub fn try_reloc_thunk_template<'a>(
             // follow forward branches that stay within the thunk
             let target = branch.target_pc(instr_pc);
             if (instr_pc + 4..thunk_template_end).contains(&target) {
-                disasm_iter.reset(&thunk_template[offset..], target);
+                let new_offset = (target - pc) as usize;
+                disasm_iter.reset(&thunk_template[new_offset..], target);
             }
             else {
                 return Err(JitError::UnsupportedControlFlow);
@@ -222,6 +223,3 @@ pub fn try_reloc_thunk_template<'a>(
         magic_offset,
     })
 }
-
-// LDR
-// LDRSW
