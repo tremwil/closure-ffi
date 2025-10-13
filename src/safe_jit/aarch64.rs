@@ -1,15 +1,7 @@
-use alloc::{borrow::Cow, collections::vec_deque::VecDeque, string::String, vec::Vec};
-use core::ops::RangeBounds;
+use alloc::{borrow::Cow, vec::Vec};
 
 use capstone::{
-    arch::{
-        arm64::{
-            ArchMode,
-            Arm64Insn::{self, *},
-            Arm64Operand, Arm64OperandType, Arm64Reg,
-        },
-        BuildsCapstone, DetailsArchInsn,
-    },
+    arch::{arm64::ArchMode, BuildsCapstone},
     Capstone, InsnGroupId, InsnGroupType,
 };
 
@@ -68,6 +60,7 @@ impl<'a> LazyRecoder<'a> {
         }
     }
 
+    #[allow(unused)]
     /// Get a reference to the new buffer.
     fn new_bytes(&self) -> &[u8] {
         &self.new_bytes
@@ -104,7 +97,7 @@ impl<'a> LazyRecoder<'a> {
         }
         let bytes_offset = self.new_bytes.len();
         self.new_bytes.extend_from_slice(bytes);
-        return bytes_offset;
+        bytes_offset
     }
 
     /// Replace the bytes at `offset` in the original slice.
