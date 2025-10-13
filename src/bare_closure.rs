@@ -712,6 +712,8 @@ macro_rules! bare_closure_impl {
 
             cc_shorthand!(new_system, $trait_ident, cc::System, "system");
 
+            cc_shorthand!(new_efiabi, $trait_ident, cc::Efiapi, "efiapi");
+
             cc_shorthand!(
                 new_sysv64,
                 $trait_ident,
@@ -783,6 +785,8 @@ macro_rules! bare_closure_impl {
             cc_shorthand_in!(new_c_in, $trait_ident, cc::C, "C");
 
             cc_shorthand_in!(new_system_in, $trait_ident, cc::System, "system");
+
+            cc_shorthand_in!(new_efiabi_in, $trait_ident, cc::Efiapi, "efiapi");
 
             cc_shorthand_in!(
                 new_sysv64_in,
