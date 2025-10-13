@@ -294,7 +294,7 @@ impl<J: JitAlloc> AllocatedThunk<J> {
 /// PC-relative static constant loads in the prologue on some architectures (namely arm/aarch64).
 /// This function controls this behavior.
 #[doc(hidden)]
-#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), feature = "safe_jit")))]
+#[cfg(any(target_arch = "arm", not(feature = "safe_jit")))]
 #[inline(never)]
 pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
     // Empty asm block is not declared as pure, so may have side-effects
@@ -304,7 +304,7 @@ pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
 }
 
 #[doc(hidden)]
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), feature = "safe_jit"))]
+#[cfg(all(not(target_arch = "arm"), feature = "safe_jit"))]
 #[inline(always)]
 pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
     f()
