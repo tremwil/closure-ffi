@@ -241,6 +241,8 @@ cc_impl!(CUnwind, "C-unwind");
 cc_impl!(System, "system");
 cc_impl!(SystemUnwind, "system-unwind");
 
+cc_impl!(Efiapi, "efiapi");
+
 cc_impl!(Sysv64, "sysv64", all(not(windows), target_arch = "x86_64"));
 cc_impl!(
     Sysv64Unwind,
