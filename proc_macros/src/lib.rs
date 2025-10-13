@@ -332,6 +332,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             {
                 const #const_ident: *const ::core::primitive::u8 = {
                     #(#thunk_attrs)*
+                    #[allow(clippy::too_many_arguments)]
                     #thunk_sig {
                         #body
                     }
