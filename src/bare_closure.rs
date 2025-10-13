@@ -706,6 +706,8 @@ macro_rules! bare_closure_impl {
 
         #[cfg(feature = "global_jit_alloc")]
         impl<B: FnPtr, S: ?Sized> $ty_name<B, S, GlobalJitAlloc> {
+            cc_shorthand!(new_rust, $trait_ident, cc::Rust, "Rust");
+
             cc_shorthand!(new_c, $trait_ident, cc::C, "C");
 
             cc_shorthand!(new_system, $trait_ident, cc::System, "system");
@@ -731,7 +733,7 @@ macro_rules! bare_closure_impl {
                 $trait_ident,
                 cc::Fastcall,
                 "fastcall",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+                all(windows, target_arch = "x86")
             );
 
             cc_shorthand!(
@@ -739,7 +741,7 @@ macro_rules! bare_closure_impl {
                 $trait_ident,
                 cc::Stdcall,
                 "stdcall",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+                all(windows, target_arch = "x86")
             );
 
             cc_shorthand!(
@@ -747,7 +749,7 @@ macro_rules! bare_closure_impl {
                 $trait_ident,
                 cc::Cdecl,
                 "cdecl",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+                all(windows, target_arch = "x86")
             );
 
             cc_shorthand!(
@@ -776,6 +778,8 @@ macro_rules! bare_closure_impl {
         }
 
         impl<B: FnPtr, S: ?Sized, A: JitAlloc> $ty_name<B, S, A> {
+            cc_shorthand_in!(new_rust_in, $trait_ident, cc::Rust, "Rust");
+
             cc_shorthand_in!(new_c_in, $trait_ident, cc::C, "C");
 
             cc_shorthand_in!(new_system_in, $trait_ident, cc::System, "system");
@@ -801,7 +805,7 @@ macro_rules! bare_closure_impl {
                 $trait_ident,
                 cc::Fastcall,
                 "fastcall",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+                all(windows, target_arch = "x86")
             );
 
             cc_shorthand_in!(
@@ -809,7 +813,7 @@ macro_rules! bare_closure_impl {
                 $trait_ident,
                 cc::Stdcall,
                 "stdcall",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+                all(windows, target_arch = "x86")
             );
 
             cc_shorthand_in!(
@@ -817,7 +821,7 @@ macro_rules! bare_closure_impl {
                 $trait_ident,
                 cc::Cdecl,
                 "cdecl",
-                all(windows, any(target_arch = "x86_64", target_arch = "x86"))
+                all(windows, target_arch = "x86")
             );
 
             cc_shorthand_in!(
