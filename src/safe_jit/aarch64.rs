@@ -6,13 +6,11 @@ use capstone::{
 };
 
 use crate::safe_jit::{
-    aarch64::encoding::{Branch, LdrImm, LdrImmOpc, LdrOfs},
+    aarch64::encoding::{Adr, Branch, LdrImm, LdrImmOpc, LdrOfs},
     JitError, RelocThunk,
 };
 
 mod encoding;
-
-use encoding::Adr;
 
 // happens to be everything below 8 but it's better to implement this way and let the compiler
 // optimize
