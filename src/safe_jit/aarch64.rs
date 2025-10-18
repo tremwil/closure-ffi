@@ -26,14 +26,14 @@ pub fn try_reloc_thunk_template<'a>(
     let mut has_thunk_asm = false;
 
     let mut extra_ldrs = Vec::new();
-    let mut recoder = CowBuffer::new(thunk_template);
+    let mut cow_buf = CowBuffer::new(thunk_template);
 
     while let Some(instr) = disasm_iter.next() {
         let instr_pc = instr.address() as usize;
         let offset = instr_pc - pc;
         let instr_u32 = u32::from_ne_bytes(instr.bytes().try_into().unwrap());
 
-        // LDR/LDRW/LDRSW/PRFM reg, label
+        // LDR/LDRW/LDRSW reg, label
         // we have to turn the instruction into:
         // LDR reg, =abs_address
         // LDR reg, [reg]
@@ -45,7 +45,7 @@ pub fn try_reloc_thunk_template<'a>(
             }
 
             // make space to insert the new LdrImm instruction
-            let to_encode = recoder.append(offset, &[0; 4]);
+            let to_encode = cow_buf.append(offset, &[0; 4]);
 
             // push a future ldr at this offset
             extra_ldrs.push((to_encode, ldr.reg(), target));
@@ -53,14 +53,14 @@ pub fn try_reloc_thunk_template<'a>(
 
             // replace the original instruction with LDR reg, [reg]
             let ldr64 = LdrOfs::new(ldr.opc(), ldr.reg(), ldr.reg(), 0)?;
-            recoder.replace(offset, &ldr64.to_raw().to_ne_bytes());
+            cow_buf.replace(offset, &ldr64.to_raw().to_ne_bytes());
         }
         // ADR/ADRP reg, label
         // we have to turn the instruction into:
         // LDR reg, =abs_address
         else if let Ok(adr) = Adr::try_from_raw(instr_u32) {
             // replace the original instruction with free space for a future ldr there
-            let to_encode = recoder.replace(offset, &[0; 4]);
+            let to_encode = cow_buf.replace(offset, &[0; 4]);
             extra_ldrs.push((to_encode, adr.reg(), adr.target_pc(instr_pc)))
         }
         // B label
@@ -86,8 +86,8 @@ pub fn try_reloc_thunk_template<'a>(
     // emit the extra LDR instructions using a post-thunk literal pool
     if !extra_ldrs.is_empty() {
         // copy the rest of the thunk template over
-        recoder.copy_up_to(thunk_template.len());
-        let new_bytes = recoder.new_bytes_mut();
+        cow_buf.copy_up_to(thunk_template.len());
+        let new_bytes = cow_buf.new_bytes_mut();
 
         // the contract is that the magic offset is at least pointer-aligned.
         // use it to determine if we need to add padding to align the literals.
@@ -108,7 +108,7 @@ pub fn try_reloc_thunk_template<'a>(
     }
 
     Ok(RelocThunk {
-        thunk: recoder.into_bytes(),
+        thunk: cow_buf.into_bytes(),
         magic_offset: new_magic_offset,
     })
 }
