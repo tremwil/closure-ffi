@@ -167,7 +167,7 @@ impl Adr {
     }
 
     pub fn dest_reg(&self) -> u32 {
-        self.rd() as u32
+        self.rd()
     }
 
     pub fn target_pc(&self, instr_pc: usize) -> usize {

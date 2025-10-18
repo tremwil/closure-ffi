@@ -71,7 +71,7 @@ pub fn try_reloc_thunk_template<'a>(
 
         // Regular branch (B)
         if instr_id == ArmInsn::ARM_INS_B {
-            let ArmOperandType::Imm(target) = arm_detail.operands().nth(0).unwrap().op_type
+            let ArmOperandType::Imm(target) = arm_detail.operands().next().unwrap().op_type
             else {
                 unreachable!()
             };
@@ -81,12 +81,10 @@ pub fn try_reloc_thunk_template<'a>(
                 continue;
             }
         }
-        // other instruction writing to PC are not supported
-        else if detail.regs_write().iter().any(|r| r.0 as u32 == ArmReg::ARM_REG_PC) {
-            return Err(JitError::UnsupportedInstruction);
-        }
-        // other instructions that affect control flow are also not supported
-        else if has_unsupported_insn_group(detail.groups()) {
+        // error on other instruction writing to PC or from unsupported groups
+        else if detail.regs_write().iter().any(|r| r.0 as u32 == ArmReg::ARM_REG_PC)
+            || has_unsupported_insn_group(detail.groups())
+        {
             return Err(JitError::UnsupportedInstruction);
         }
         // if the instruction doesn't read the PC, we don't care about it at this point.
