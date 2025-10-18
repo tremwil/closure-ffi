@@ -1,4 +1,4 @@
-use crate::safe_jit::{util::bitflags, JitError};
+use crate::safe_jit::{arm_common::bitflags, JitError};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Error;
@@ -32,7 +32,7 @@ pub enum LdrImmOpc {
     Load32,
     Load64,
     Load32Sx,
-    Prefetch,
+    // 3 is PRFM (prefetch), but we can't handle it
 }
 
 impl LdrImm {
@@ -42,8 +42,8 @@ impl LdrImm {
     }
 
     #[allow(unused)]
-    pub fn new_at(pc: u64, opc: LdrImmOpc, reg: u32, target: u64) -> Result<Self, Error> {
-        let diff = target as i64 - pc as i64;
+    pub fn new_at(pc: usize, opc: LdrImmOpc, reg: u32, target: usize) -> Result<Self, Error> {
+        let diff = target as isize - pc as isize;
         if diff % 4 != 0 {
             return Err(Error);
         }
@@ -51,7 +51,7 @@ impl LdrImm {
     }
 
     pub fn assert_opcode(&self) -> bool {
-        self.fixed() == 0b11000
+        self.fixed() == 0b11000 && self.opc_raw() != 3
     }
 
     pub fn new(opc: LdrImmOpc, reg: u32, imm: i32) -> Result<Self, Error> {
@@ -63,8 +63,8 @@ impl LdrImm {
         Ok(ins)
     }
 
-    pub fn target_pc(&self, pc: u64) -> u64 {
-        pc.wrapping_add_signed(self.imm() as i64 * 4)
+    pub fn target_pc(&self, pc: usize) -> usize {
+        pc.wrapping_add_signed(self.imm() as isize * 4)
     }
 
     pub fn opc(&self) -> LdrImmOpc {
@@ -72,8 +72,7 @@ impl LdrImm {
             0 => LdrImmOpc::Load32,
             1 => LdrImmOpc::Load64,
             2 => LdrImmOpc::Load32Sx,
-            3 => LdrImmOpc::Prefetch,
-            _ => unreachable!(),
+            _ => panic!("unsupported opc"),
         }
     }
 }
@@ -103,9 +102,9 @@ impl Adr {
         self.is_adrp_raw() == 1
     }
 
-    pub fn target_pc(&self, pc: u64) -> u64 {
+    pub fn target_pc(&self, pc: usize) -> usize {
         let unsigned_imm = self.imm_hi() << 2 | self.imm_lo();
-        let signed_imm = ((unsigned_imm << 12) as i32 >> 12) as i64;
+        let signed_imm = ((unsigned_imm << 12) as i32 >> 12) as isize;
 
         if self.is_adrp() {
             (pc & !0xFFF).wrapping_add_signed(signed_imm * 0x1000)
@@ -135,13 +134,13 @@ impl Branch {
         self.fixed() == 0b101
     }
 
-    pub fn target_pc(&self, pc: u64) -> u64 {
-        pc.wrapping_add_signed(self.imm() as i64 * 4)
+    pub fn target_pc(&self, pc: usize) -> usize {
+        pc.wrapping_add_signed(self.imm() as isize * 4)
     }
 
     #[allow(unused)]
-    pub fn try_set_target_pc(&mut self, pc: u64, target: u64) -> Result<(), ()> {
-        let diff = target as i64 - pc as i64;
+    pub fn try_set_target_pc(&mut self, pc: usize, target: usize) -> Result<(), ()> {
+        let diff = target as isize - pc as isize;
         if diff % 4 != 0 {
             return Err(());
         }
@@ -181,10 +180,6 @@ impl LdrOfs {
             LdrImmOpc::Load32Sx => {
                 ins.set_opc(0b10);
                 ins.set_scale(0b10);
-            }
-            LdrImmOpc::Prefetch => {
-                ins.set_opc(0b10);
-                ins.set_scale(0b11);
             }
         }
 
@@ -242,7 +237,6 @@ mod tests {
             Case::new(LdrImmOpc::Load64, 3, -4, b"\x83\xff\xff\x58"),
             Case::new(LdrImmOpc::Load32, 3, 5, b"\xa3\x00\x00\x18"),
             Case::new(LdrImmOpc::Load32Sx, 3, 5, b"\xa3\x00\x00\x98"),
-            Case::new(LdrImmOpc::Prefetch, 0, 10, b"\x40\x01\x00\xd8"),
         ];
 
         for case in CASES {
@@ -263,16 +257,16 @@ mod tests {
         struct Case {
             is_adrp: bool,
             reg: u32,
-            pc: u64,
-            target: u64,
+            pc: usize,
+            target: usize,
             expected: u32,
         }
         impl Case {
             pub const fn new(
                 is_adrp: bool,
                 reg: u32,
-                pc: u64,
-                target: u64,
+                pc: usize,
+                target: usize,
                 expected: &'static [u8; 4],
             ) -> Self {
                 Case {
@@ -306,12 +300,12 @@ mod tests {
     #[test]
     fn aarch64_encoding_branch() {
         struct Case {
-            pc: u64,
-            target: u64,
+            pc: usize,
+            target: usize,
             expected: u32,
         }
         impl Case {
-            pub const fn new(pc: u64, target: u64, expected: &'static [u8; 4]) -> Self {
+            pub const fn new(pc: usize, target: usize, expected: &'static [u8; 4]) -> Self {
                 Case {
                     pc,
                     target,
@@ -364,7 +358,6 @@ mod tests {
             Case::new(LdrImmOpc::Load64, 3, 4, 0x100, b"\x83\x80\x40\xf9"),
             Case::new(LdrImmOpc::Load32, 3, 4, 0x100, b"\x83\x00\x41\xb9"),
             Case::new(LdrImmOpc::Load32Sx, 3, 4, 0x100, b"\x83\x00\x81\xb9"),
-            Case::new(LdrImmOpc::Prefetch, 0, 3, 0x200, b"\x60\x00\x81\xf9"),
         ];
 
         for case in CASES {

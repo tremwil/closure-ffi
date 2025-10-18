@@ -239,7 +239,7 @@ impl<J: JitAlloc> AllocatedThunk<J> {
             magic_offset,
         } = crate::safe_jit::reloc_thunk_template(
             thunk_template,
-            thunk_template_ptr as usize as u64,
+            thunk_template_ptr as usize,
             template_magic_offset,
         );
 
@@ -294,7 +294,7 @@ impl<J: JitAlloc> AllocatedThunk<J> {
 /// PC-relative static constant loads in the prologue on some architectures (namely arm/aarch64).
 /// This function controls this behavior.
 #[doc(hidden)]
-#[cfg(any(target_arch = "arm", not(feature = "safe_jit")))]
+#[cfg(not(feature = "safe_jit"))]
 #[inline(never)]
 pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
     // Empty asm block is not declared as pure, so may have side-effects
@@ -304,7 +304,7 @@ pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
 }
 
 #[doc(hidden)]
-#[cfg(all(not(target_arch = "arm"), feature = "safe_jit"))]
+#[cfg(feature = "safe_jit")]
 #[inline(always)]
 pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
     f()

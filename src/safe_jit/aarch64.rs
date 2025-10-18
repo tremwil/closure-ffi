@@ -1,133 +1,36 @@
-use alloc::{borrow::Cow, vec::Vec};
+use alloc::vec::Vec;
 
 use capstone::{
     arch::{arm64::ArchMode, BuildsCapstone},
-    Capstone, InsnGroupId, InsnGroupType,
+    Capstone,
 };
 
 use crate::safe_jit::{
-    aarch64::encoding::{Adr, Branch, LdrImm, LdrImmOpc, LdrOfs},
+    arm_common::{
+        encoding::{Adr, Branch, LdrImm, LdrImmOpc, LdrOfs},
+        has_unsupported_insn_group, CowBuffer,
+    },
     JitError, RelocThunk,
 };
 
-mod encoding;
-
-// happens to be everything below 8 but it's better to implement this way and let the compiler
-// optimize
-const UNSUPPORTED_GROUPS: &[InsnGroupType::Type] = &[
-    InsnGroupType::CS_GRP_INVALID,
-    InsnGroupType::CS_GRP_JUMP,
-    InsnGroupType::CS_GRP_CALL,
-    InsnGroupType::CS_GRP_RET,
-    InsnGroupType::CS_GRP_INT,
-    InsnGroupType::CS_GRP_IRET,
-    InsnGroupType::CS_GRP_PRIVILEGE,
-    InsnGroupType::CS_GRP_BRANCH_RELATIVE,
-];
-
-fn is_unsupported(groups: &[InsnGroupId]) -> bool {
-    groups
-        .iter()
-        .any(|g| UNSUPPORTED_GROUPS.contains(&(g.0 as InsnGroupType::Type)))
-}
-
-/// Lazy buffer + cursor for incrementally replacing and adding bytes to a slice
-struct LazyRecoder<'a> {
-    orig_bytes: &'a [u8],
-    new_bytes: Vec<u8>,
-    num_copied: usize,
-}
-
-impl<'a> LazyRecoder<'a> {
-    fn new(orig_bytes: &'a [u8]) -> Self {
-        Self {
-            orig_bytes,
-            new_bytes: Vec::new(),
-            num_copied: 0,
-        }
-    }
-
-    fn into_bytes(mut self) -> Cow<'a, [u8]> {
-        if self.new_bytes.is_empty() {
-            self.orig_bytes.into()
-        }
-        else {
-            // write the remaining slice
-            self.new_bytes.extend_from_slice(&self.orig_bytes[self.num_copied..]);
-            self.new_bytes.into()
-        }
-    }
-
-    #[allow(unused)]
-    /// Get a reference to the new buffer.
-    fn new_bytes(&self) -> &[u8] {
-        &self.new_bytes
-    }
-
-    /// Get a mutable reference to the new buffer.
-    ///
-    /// You may grow this buffer arbitrarily, but shrinking it will lead to logic errors.
-    fn new_bytes_mut(&mut self) -> &mut Vec<u8> {
-        &mut self.new_bytes
-    }
-
-    /// Copy bytes from the original slice into [`Self::new_bytes`] up to `offset` in the original
-    /// slice.
-    fn copy_up_to(&mut self, offset: usize) {
-        debug_assert!(offset >= self.num_copied && offset <= self.orig_bytes.len());
-
-        // preallocate minimum capacity
-        if self.new_bytes.is_empty() {
-            self.new_bytes = Vec::with_capacity(self.orig_bytes.len())
-        }
-        let new_num_copied = offset.min(self.orig_bytes.len());
-        self.new_bytes
-            .extend_from_slice(&self.orig_bytes[self.num_copied..new_num_copied]);
-        self.num_copied = new_num_copied;
-    }
-
-    /// Insert new bytes in the buffer at after an offset in the original slice.
-    ///
-    /// Returns the offset of `bytes` in [`Self::new_bytes`].
-    fn append(&mut self, offset: usize, bytes: &[u8]) -> usize {
-        if !bytes.is_empty() {
-            self.copy_up_to(offset);
-        }
-        let bytes_offset = self.new_bytes.len();
-        self.new_bytes.extend_from_slice(bytes);
-        bytes_offset
-    }
-
-    /// Replace the bytes at `offset` in the original slice.
-    ///
-    /// Returns the offset of `bytes` in [`Self::new_bytes`].
-    fn replace(&mut self, offset: usize, bytes: &[u8]) -> usize {
-        debug_assert!(offset + bytes.len() <= self.orig_bytes.len());
-
-        let bytes_offset = self.append(offset, bytes);
-        self.num_copied += bytes.len();
-        bytes_offset
-    }
-}
-
 pub fn try_reloc_thunk_template<'a>(
     thunk_template: &'a [u8],
-    pc: u64,
+    pc: usize,
     magic_offset: usize,
 ) -> Result<RelocThunk<'a>, JitError> {
-    let thunk_template_end = thunk_template.len() as u64 + pc;
+    let thunk_template_end = thunk_template.len() + pc;
     let cs = Capstone::new().arm64().mode(ArchMode::Arm).detail(true).build().unwrap();
-    let mut disasm_iter = cs.disasm_iter(thunk_template, pc).unwrap();
+    let mut disasm_iter = cs.disasm_iter(thunk_template, pc as u64).unwrap();
 
-    let mut magic_offset_shift = 0;
+    let mut new_magic_offset = magic_offset;
     let mut has_thunk_asm = false;
 
     let mut extra_ldrs = Vec::new();
-    let mut recoder = LazyRecoder::new(thunk_template);
+    let mut recoder = CowBuffer::new(thunk_template);
 
     while let Some(instr) = disasm_iter.next() {
-        let instr_pc = instr.address();
-        let offset = (instr_pc - pc) as usize;
+        let instr_pc = instr.address() as usize;
+        let offset = instr_pc - pc;
         let instr_u32 = u32::from_ne_bytes(instr.bytes().try_into().unwrap());
 
         // LDR/LDRW/LDRSW/PRFM reg, label
@@ -136,7 +39,7 @@ pub fn try_reloc_thunk_template<'a>(
         // LDR reg, [reg]
         if let Ok(ldr) = LdrImm::try_from_raw(instr_u32) {
             let target = ldr.target_pc(instr_pc);
-            if target == pc + magic_offset as u64 {
+            if target == pc + magic_offset {
                 has_thunk_asm = true;
                 break;
             }
@@ -146,7 +49,7 @@ pub fn try_reloc_thunk_template<'a>(
 
             // push a future ldr at this offset
             extra_ldrs.push((to_encode, ldr.reg(), target));
-            magic_offset_shift += 4;
+            new_magic_offset += 4;
 
             // replace the original instruction with LDR reg, [reg]
             let ldr64 = LdrOfs::new(ldr.opc(), ldr.reg(), ldr.reg(), 0)?;
@@ -165,25 +68,20 @@ pub fn try_reloc_thunk_template<'a>(
             // follow forward branches that stay within the thunk
             let target = branch.target_pc(instr_pc);
             if (instr_pc + 4..thunk_template_end).contains(&target) {
-                let new_offset = (target - pc) as usize;
-                disasm_iter.reset(&thunk_template[new_offset..], target);
+                disasm_iter.reset(&thunk_template[target - pc..], target as u64);
             }
             else {
-                return Err(JitError::UnsupportedControlFlow);
+                return Err(JitError::UnsupportedInstruction);
             }
         }
-        // non-fallthrough control flow (not supported)
-        else if is_unsupported(cs.insn_detail(&instr).unwrap().groups()) {
-            return Err(JitError::UnsupportedControlFlow);
+        else if has_unsupported_insn_group(cs.insn_detail(&instr).unwrap().groups()) {
+            return Err(JitError::UnsupportedInstruction);
         }
     }
 
     if !has_thunk_asm {
         return Err(JitError::NoThunkAsm);
     }
-
-    // adjust the magic offset for the new buffer, if modified
-    let magic_offset = magic_offset + magic_offset_shift;
 
     // emit the extra LDR instructions using a post-thunk literal pool
     if !extra_ldrs.is_empty() {
@@ -193,7 +91,7 @@ pub fn try_reloc_thunk_template<'a>(
 
         // the contract is that the magic offset is at least pointer-aligned.
         // use it to determine if we need to add padding to align the literals.
-        if !(new_bytes.len() - magic_offset).is_multiple_of(8) {
+        if !(new_bytes.len() - new_magic_offset).is_multiple_of(8) {
             new_bytes.extend_from_slice(&[0; 4]);
         }
 
@@ -211,6 +109,6 @@ pub fn try_reloc_thunk_template<'a>(
 
     Ok(RelocThunk {
         thunk: recoder.into_bytes(),
-        magic_offset,
+        magic_offset: new_magic_offset,
     })
 }

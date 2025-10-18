@@ -1,103 +1,185 @@
+use alloc::vec::Vec;
+
 use capstone::{
     arch::{
-        arm::{ArchMode, ArmInsn, ArmOperandType, ArmReg},
+        arm::{ArchMode, ArmCC, ArmInsn, ArmOperandType, ArmReg},
         BuildsCapstone, DetailsArchInsn,
     },
-    Capstone, InsnGroupId, InsnGroupType,
+    Capstone,
 };
 
-use super::{JitError, RelocThunk};
-
-// happens to be everything below 8 but it's better to implement this way and let the compiler
-// optimize
-const UNSUPPORTED_GROUPS: &[InsnGroupType::Type] = &[
-    InsnGroupType::CS_GRP_INVALID,
-    InsnGroupType::CS_GRP_JUMP,
-    InsnGroupType::CS_GRP_CALL,
-    InsnGroupType::CS_GRP_RET,
-    InsnGroupType::CS_GRP_INT,
-    InsnGroupType::CS_GRP_IRET,
-    InsnGroupType::CS_GRP_PRIVILEGE,
-    InsnGroupType::CS_GRP_BRANCH_RELATIVE,
-];
-
-fn is_unsupported(groups: &[InsnGroupId]) -> bool {
-    groups
-        .iter()
-        .any(|g| UNSUPPORTED_GROUPS.contains(&(g.0 as InsnGroupType::Type)))
-}
+use crate::safe_jit::{
+    arm_common::{
+        encoding::{Adr, LdrImm, LoadImm},
+        has_unsupported_insn_group, CowBuffer,
+    },
+    JitError, RelocThunk,
+};
 
 #[cfg(thumb_mode)]
-const MODE: ArchMode = ArchMode::Thumb;
+pub const MODE: ArchMode = ArchMode::Thumb;
 #[cfg(not(thumb_mode))]
-const MODE: ArchMode = ArchMode::Arm;
+pub const MODE: ArchMode = ArchMode::Arm;
+
+// /// Get the target address for a pc-relative memory load expression.
+// fn get_load_pc_rel_target(
+//     instr_pc: usize,
+//     arm_detail: &ArmInsnDetail<'_>,
+//     op: usize,
+// ) -> Option<usize> {
+//     match arm_detail.operands().nth(op).unwrap().op_type {
+//         ArmOperandType::Mem(mem)
+//             if mem.base().0 as u32 == ArmReg::ARM_REG_PC
+//             // make sure it's not a load (register) instruction
+//             && mem.index().0 as u32 == ArmReg::ARM_REG_INVALID =>
+//         {
+//             Some(effective_pc(instr_pc).wrapping_add_signed(mem.disp() as isize))
+//         }
+//         _ => None,
+//     }
+// }
 
 pub fn try_reloc_thunk_template<'a>(
     thunk_template: &'a [u8],
-    pc: u64,
+    pc: usize,
     magic_offset: usize,
 ) -> Result<RelocThunk<'a>, JitError> {
-    let thunk_template_end = thunk_template.len() as u64 + pc;
+    let thunk_template_end = thunk_template.len() + pc;
     let cs = Capstone::new().arm().mode(MODE).detail(true).build().unwrap();
-    let mut disasm_iter = cs.disasm_iter(thunk_template, pc).unwrap();
+    let mut disasm_iter = cs.disasm_iter(thunk_template, pc as u64).unwrap();
 
     let mut has_thunk_asm = false;
+    let mut new_magic_offset = magic_offset;
+    let mut cow_buf = CowBuffer::new(thunk_template);
+    let mut extra_ldrs = Vec::new();
 
     while let Some(instr) = disasm_iter.next() {
-        let instr_pc = instr.address();
+        // std::println!(
+        //     "{:08x} {} {}",
+        //     instr.address(),
+        //     instr.mnemonic().unwrap(),
+        //     instr.op_str().unwrap()
+        // );
+
+        let instr_pc = instr.address() as usize;
+        let instr_id = ArmInsn::from(instr.id().0);
+        let offset = instr_pc - pc;
 
         let detail = cs.insn_detail(&instr).unwrap();
         let arch_detail = detail.arch_detail();
         let arm_detail = arch_detail.arm().unwrap();
 
-        // Regular branch
-        if instr.id().0 == ArmInsn::ARM_INS_B as u32 {
+        // Regular branch (B)
+        if instr_id == ArmInsn::ARM_INS_B {
             let ArmOperandType::Imm(target) = arm_detail.operands().nth(0).unwrap().op_type
             else {
                 unreachable!()
             };
-            let target = target as u64;
+            let target = target as usize;
             if (pc..thunk_template_end).contains(&target) {
-                let offset = (target - pc) as usize;
-                disasm_iter.reset(&thunk_template[offset..], target);
+                disasm_iter.reset(&thunk_template[target - pc..], target as u64);
                 continue;
             }
         }
-        else if instr.id().0 == ArmInsn::ARM_INS_LDR as u32 {
-            match arm_detail.operands().nth(1).unwrap().op_type {
-                ArmOperandType::Mem(mem) if mem.base().0 as u32 == ArmReg::ARM_REG_PC => {
-                    let pc_value = (instr_pc + 2 * instr.bytes().len() as u64) & !3;
-                    let target = pc_value.wrapping_add_signed(mem.disp() as i64);
+        // other instruction writing to PC are not supported
+        else if detail.regs_write().iter().any(|r| r.0 as u32 == ArmReg::ARM_REG_PC) {
+            return Err(JitError::UnsupportedInstruction);
+        }
+        // other instructions that affect control flow are also not supported
+        else if has_unsupported_insn_group(detail.groups()) {
+            return Err(JitError::UnsupportedInstruction);
+        }
+        // if the instruction doesn't read the PC, we don't care about it at this point.
+        // it's OK to relocate it.
+        if !detail.regs_read().iter().any(|r| r.0 as u32 == ArmReg::ARM_REG_PC) {
+            continue;
+        }
+        // We don't support relocating instructions that conditionally read the PC.
+        if arm_detail.cc() != ArmCC::ARM_CC_AL {
+            return Err(JitError::UnsupportedInstruction);
+        }
 
-                    if target == pc + magic_offset as u64 {
-                        has_thunk_asm = true;
-                        break;
-                    }
+        // ADR reg, label => LDR reg, =label_address
+        if let Some(adr) = Adr::try_from_raw(instr.bytes()) {
+            new_magic_offset += 4 - instr.len();
+
+            // allocate space for a new LDR
+            let ldr_ofs = cow_buf.append(offset, &[0; 4]);
+            extra_ldrs.push((ldr_ofs, adr.dest_reg(), adr.target_pc(instr_pc)));
+
+            // ignore the original ADR instruction
+            cow_buf.ignore(offset, instr.len());
+            continue;
+        }
+        // LDR.. reg, label => LDR reg, =label_address; LDR.. reg, [reg]
+        else if let Some(load) = LoadImm::try_from_raw(instr_id, instr.bytes()) {
+            //std::println!("{:?}", load);
+
+            if let Some(target) = load.target_pc(instr_pc) {
+                if target == pc + magic_offset {
+                    has_thunk_asm = true;
+                    break;
                 }
-                _ => (),
+
+                // allocate space for a new LDR
+                new_magic_offset += 4;
+                let ldr_ofs = cow_buf.append(offset, &[0; 4]);
+                extra_ldrs.push((ldr_ofs, load.rt(), target));
+
+                // replace the instruction by a rt load (LDRxx reg, [reg])
+                load.as_rt_load(|new| cow_buf.append(offset, new));
+                cow_buf.ignore(offset, instr.len());
+                continue;
             }
         }
 
-        if detail
-            .regs_read()
-            .iter()
-            .chain(detail.regs_write())
-            .any(|r| r.0 as u32 == ArmReg::ARM_REG_PC)
-        {
-            return Err(JitError::UnsupportedControlFlow);
-        }
-
-        if is_unsupported(detail.groups()) {
-            return Err(JitError::UnsupportedControlFlow);
-        }
+        // any other pc-relative reads are unsupported
+        return Err(JitError::UnsupportedInstruction);
     }
 
     if !has_thunk_asm {
         return Err(JitError::NoThunkAsm);
     }
 
+    // emit the extra LDR instructions using a post-thunk literal pool
+    if !extra_ldrs.is_empty() {
+        // copy the rest of the thunk template over
+        cow_buf.copy_up_to(thunk_template.len());
+        let new_bytes = cow_buf.new_bytes_mut();
+
+        // the contract is that the magic offset is at least pointer-aligned.
+        // use it to determine if we need to add padding to align the literals.
+        if !(new_bytes.len() - new_magic_offset).is_multiple_of(4) {
+            new_bytes.extend_from_slice(&[0; 2]);
+        }
+
+        // write the absolute addresses to the literal pool and emit LDR instructions
+        // referring to them.
+        for (instr_offset, reg, addr) in extra_ldrs {
+            let addr_pc = pc + new_bytes.len();
+            let ldr = LdrImm::new_lit(pc + instr_offset, reg, addr_pc)?;
+
+            new_bytes.extend_from_slice(&addr.to_ne_bytes());
+            new_bytes[instr_offset..instr_offset + 4].copy_from_slice(&ldr.bytes());
+        }
+    }
+
+    //std::println!("recoded:");
+    // let mut disasm_iter = cs.disasm_iter(cow_buf.new_bytes(), pc as u64).unwrap();
+    // while let Some(instr) = disasm_iter.next() {
+    //     std::println!(
+    //         "{:08x} {:<16} {} {}",
+    //         instr.address(),
+    //         std::format!("{:02x?}", instr.bytes()),
+    //         instr.mnemonic().unwrap(),
+    //         instr.op_str().unwrap()
+    //     );
+    // }
+
+    // drop(disasm_iter);
+
     Ok(RelocThunk {
-        thunk: thunk_template.into(),
-        magic_offset,
+        thunk: cow_buf.into_bytes(),
+        magic_offset: new_magic_offset,
     })
 }
