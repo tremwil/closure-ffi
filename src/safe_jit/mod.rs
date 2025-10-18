@@ -1,7 +1,5 @@
 use alloc::borrow::Cow;
 
-mod util;
-
 #[cfg(target_arch = "x86_64")]
 mod x86_64;
 #[cfg(target_arch = "x86_64")]
@@ -22,11 +20,14 @@ mod arm;
 #[cfg(target_arch = "arm")]
 use arm::try_reloc_thunk_template;
 
+#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+mod arm_common;
+
 #[derive(Clone, Copy, Debug)]
 #[allow(unused)]
 enum JitError {
     InvalidInstruction,
-    UnsupportedControlFlow,
+    UnsupportedInstruction,
     NoAvailableRegister,
     EncodingError,
     NoThunkAsm,
@@ -43,7 +44,7 @@ pub struct RelocThunk<'a> {
 /// If the relocation would lead to broken code.
 pub fn reloc_thunk_template<'a>(
     prologue: &'a [u8],
-    ip: u64,
+    ip: usize,
     magic_offset: usize,
 ) -> RelocThunk<'a> {
     try_reloc_thunk_template(prologue, ip, magic_offset).expect(

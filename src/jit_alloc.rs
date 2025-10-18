@@ -151,12 +151,7 @@ mod default_jit_alloc {
         #[cfg(all(target_arch = "arm", target_os = "linux"))]
         unsafe {
             const __ARM_NR_CACHEFLUSH: i32 = 0x0f0002;
-            libc::syscall(
-                __ARM_NR_CACHEFLUSH,
-                rx_ptr as usize as u64,
-                (rx_ptr as usize + size) as u64,
-                0,
-            );
+            libc::syscall(__ARM_NR_CACHEFLUSH, rx_ptr, rx_ptr.byte_add(size), 0);
             return;
         }
         #[allow(unreachable_code)]

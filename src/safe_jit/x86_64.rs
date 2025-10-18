@@ -10,9 +10,11 @@ use crate::arch::consts;
 
 pub fn try_reloc_thunk_template<'a>(
     thunk_template: &'a [u8],
-    ip: u64,
+    ip: usize,
     magic_offset: usize,
 ) -> Result<RelocThunk<'a>, JitError> {
+    let ip = ip as u64;
+
     let mut decoder = Decoder::with_ip(64, thunk_template, ip, DecoderOptions::NONE);
 
     let mut instructions = Vec::new();
@@ -27,7 +29,7 @@ pub fn try_reloc_thunk_template<'a>(
             return Err(JitError::InvalidInstruction);
         }
         else if instruction.flow_control() != FlowControl::Next {
-            return Err(JitError::UnsupportedControlFlow);
+            return Err(JitError::UnsupportedInstruction);
         }
 
         let needs_reloc = instruction.is_ip_rel_memory_operand();
