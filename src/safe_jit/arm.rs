@@ -21,24 +21,6 @@ pub const MODE: ArchMode = ArchMode::Thumb;
 #[cfg(not(thumb_mode))]
 pub const MODE: ArchMode = ArchMode::Arm;
 
-// /// Get the target address for a pc-relative memory load expression.
-// fn get_load_pc_rel_target(
-//     instr_pc: usize,
-//     arm_detail: &ArmInsnDetail<'_>,
-//     op: usize,
-// ) -> Option<usize> {
-//     match arm_detail.operands().nth(op).unwrap().op_type {
-//         ArmOperandType::Mem(mem)
-//             if mem.base().0 as u32 == ArmReg::ARM_REG_PC
-//             // make sure it's not a load (register) instruction
-//             && mem.index().0 as u32 == ArmReg::ARM_REG_INVALID =>
-//         {
-//             Some(effective_pc(instr_pc).wrapping_add_signed(mem.disp() as isize))
-//         }
-//         _ => None,
-//     }
-// }
-
 pub fn try_reloc_thunk_template<'a>(
     thunk_template: &'a [u8],
     pc: usize,
@@ -54,13 +36,6 @@ pub fn try_reloc_thunk_template<'a>(
     let mut extra_ldrs = Vec::new();
 
     while let Some(instr) = disasm_iter.next() {
-        // std::println!(
-        //     "{:08x} {} {}",
-        //     instr.address(),
-        //     instr.mnemonic().unwrap(),
-        //     instr.op_str().unwrap()
-        // );
-
         let instr_pc = instr.address() as usize;
         let instr_id = ArmInsn::from(instr.id().0);
         let offset = instr_pc - pc;
@@ -111,8 +86,6 @@ pub fn try_reloc_thunk_template<'a>(
         }
         // LDR.. reg, label => LDR reg, =label_address; LDR.. reg, [reg]
         else if let Some(load) = LoadImm::try_from_raw(instr_id, instr.bytes()) {
-            //std::println!("{:?}", load);
-
             if let Some(target) = load.target_pc(instr_pc) {
                 if target == pc + magic_offset {
                     has_thunk_asm = true;
@@ -161,20 +134,6 @@ pub fn try_reloc_thunk_template<'a>(
             new_bytes[instr_offset..instr_offset + 4].copy_from_slice(&ldr.bytes());
         }
     }
-
-    //std::println!("recoded:");
-    // let mut disasm_iter = cs.disasm_iter(cow_buf.new_bytes(), pc as u64).unwrap();
-    // while let Some(instr) = disasm_iter.next() {
-    //     std::println!(
-    //         "{:08x} {:<16} {} {}",
-    //         instr.address(),
-    //         std::format!("{:02x?}", instr.bytes()),
-    //         instr.mnemonic().unwrap(),
-    //         instr.op_str().unwrap()
-    //     );
-    // }
-
-    // drop(disasm_iter);
 
     Ok(RelocThunk {
         thunk: cow_buf.into_bytes(),
