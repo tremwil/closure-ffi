@@ -14,10 +14,10 @@ struct CallPop {
 
 pub fn try_reloc_thunk_template<'a>(
     thunk_template: &'a [u8],
-    ip: u64,
+    ip: usize,
     magic_offset: usize,
 ) -> Result<RelocThunk<'a>, JitError> {
-    let mut decoder = Decoder::with_ip(32, thunk_template, ip, DecoderOptions::NONE);
+    let mut decoder = Decoder::with_ip(32, thunk_template, ip as u64, DecoderOptions::NONE);
 
     let mut instruction = Instruction::default();
     let mut reached_thunk_asm = false;
@@ -53,7 +53,7 @@ pub fn try_reloc_thunk_template<'a>(
                 }
             }
 
-            return Err(JitError::UnsupportedControlFlow);
+            return Err(JitError::UnsupportedInstruction);
         }
     }
 
