@@ -10,6 +10,18 @@ fn check_supported_archs() {
     if !["x86_64", "x86", "aarch64", "arm"].contains(&arch.as_str()) {
         println!("cargo::error=closure-ffi does not support the '{arch}' target architecture.");
     }
+
+    // on non-Windows x86, the crate will not function (segfault) without the safe_jit feature.
+    // don't allow building without it.
+    if arch == "x86"
+        && std::env::var("CARGO_CFG_WINDOWS").is_err()
+        && std::env::var("CARGO_FEATURE_SAFE_JIT").is_err()
+    {
+        println!(
+            "cargo::error=closure-ffi requires the 'safe_jit' feature to be enabled \
+            on non-Windows x86 targets. It will produce incorrect code without it."
+        );
+    }
 }
 
 /// Set a `thumb_mode` cfg on arm targets using thumb encoding by default.
@@ -56,7 +68,7 @@ fn check_coverage_supported() {
     }
 
     if rustflags::from_env()
-        .any(|f| matches!(f, Flag::Codegen { opt, value: _ } if opt == "instrument-coverage"))
+        .any(|f| matches!(f, Flag::Codegen { opt, .. } if opt == "instrument-coverage"))
     {
         println!(
             "cargo::error=closure-ffi requires a nightly compiler and the 'coverage' crate feature \
