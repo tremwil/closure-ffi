@@ -289,10 +289,9 @@ impl<J: JitAlloc> AllocatedThunk<J> {
 
 /// Runs the provided closure and returns the result.
 ///
-/// Depending on the enabled features and architecture, it may be necessary to prevent the compiler
-/// from inlining a closure call into the compiler thunk function, which may bring in some
-/// PC-relative static constant loads in the prologue on some architectures (namely arm/aarch64).
-/// This function controls this behavior.
+/// When `safe_jit` is turned off, it is necessary to prevent the compiler from inlining a
+/// closure call into the thunk function, as it may bring in some PC-relative operations the
+/// prologue on architectures other than x86_64. This function controls this behavior.
 #[doc(hidden)]
 #[cfg(not(feature = "safe_jit"))]
 #[inline(never)]
