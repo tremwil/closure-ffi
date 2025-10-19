@@ -1,4 +1,4 @@
-use crate::safe_jit::{arm_common::bitflags, JitError};
+use crate::safe_jit::{arm_util::bitflags, JitError};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Error;
