@@ -91,8 +91,11 @@ where
 ///   pointer, all associated types ([`CC`][`FnPtr::CC`], [`Args`](FnPtr::Args) and
 ///   [`Ret`](FnPtr::Ret)) must be consistent with the function pointer.
 pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
-    /// Calling convention of the bare function, as a ZST marker type.
-    type CC: Default;
+    /// Marker type for the bare function's calling convention.
+    ///
+    /// This is *required* to be a ZST; in particular it must be safe to create an
+    /// instance via [`core::mem::zeroed`] or a reference via [`core::ptr::dangling`].
+    type CC: Default + Copy + Send + Sync;
 
     #[cfg(all(not(doc), feature = "tuple_trait"))]
     /// The arguments of the function, as a tuple.
