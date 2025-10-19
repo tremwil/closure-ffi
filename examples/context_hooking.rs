@@ -125,7 +125,7 @@ pub struct Hook<'a, B: FnPtr> {
     // We use `BareFnAny` to specify stronger bounds (`Send + Sync`) on the type-erased closure.
     // By doing this, `Self` automatically implements `Send` and `Sync`, no need for unsafe impls!
     bare_wrapper: BareFnAny<B, dyn Send + Sync + 'a>,
-    // Here we would also store a hanlde to the executable memory we allocated for the trampoline,
+    // Here we would also store a handle to the executable memory we allocated for the trampoline,
     // the target function's address, etc.
 }
 

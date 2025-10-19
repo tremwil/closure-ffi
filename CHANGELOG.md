@@ -122,7 +122,7 @@ release.
   use of closure-ffi internally.
 
 - Sweeping changes to the `BareFn*` generic parameters. The `BareFn*` types now type erase the closure,
-  removing the need for the `bare_dyn` macro (which was not ideal as it would add an uncessary layer of
+  removing the need for the `bare_dyn` macro (which was not ideal as it would add an unnecessary layer of
   indirection). The DST used for type erasure is customizable via the type parameter `S` of `BareFn*Any`,
   with `BareFn*` and `BareFn*Send` now being type aliases for the common cases of no additional bounds
   and a `Send` bound on the closure, respectively.
@@ -146,7 +146,7 @@ release.
 - `custom_jit_alloc` feature allowing downstream crates to implement their own `GlobalJitAlloc`
 
 ### Fixed
-- Stop using .text relocations in asm thunks for compatiblity with platforms where they are not allowed
+- Stop using .text relocations in asm thunks for compatibility with platforms where they are not allowed
   (e.g. MacOS). Relocations are still used when `target_arch = "x86"`. (Fixes #5)
 
 ## [v0.4.0] - 2025-04-27
