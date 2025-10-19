@@ -288,7 +288,7 @@ macro_rules! bare_closure_impl {
         ///
         /// # Type parameters
         /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
-        ///   lifetime bounds and marker traits which the closure must satsify, e.g. `S = dyn Send +
+        ///   lifetime bounds and marker traits which the closure must satisfy, e.g. `S = dyn Send +
         ///   'a`. Without the `unstable` feature, this is limited to [`dyn Any`](Any) and
         ///   combinations of [`Send`] and [`Sync`] marker types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
@@ -319,7 +319,7 @@ macro_rules! bare_closure_impl {
         ///
         /// # Type parameters
         /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
-        ///   lifetime bounds and marker traits which the closure must satsify, e.g. `S = dyn Send +
+        ///   lifetime bounds and marker traits which the closure must satisfy, e.g. `S = dyn Send +
         ///   'a`. Without the `unstable` feature, this is limited to [`dyn Any`](Any) and
         ///   combinations of [`Send`] and [`Sync`] marker types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
@@ -431,7 +431,7 @@ macro_rules! bare_closure_impl {
         ///   function pointers, you will need to use the [`bare_hrtb`] macro to define a wrapper
         ///   type.
         /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
-        ///   lifetime bounds and marker traits which the closure must satsify, e.g. `S = dyn Send +
+        ///   lifetime bounds and marker traits which the closure must satisfy, e.g. `S = dyn Send +
         ///   'a`. Without the `unstable` feature, this is limited to [`dyn Any`](Any) and
         ///   combinations of [`Send`] and [`Sync`] marker types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.
@@ -466,7 +466,7 @@ macro_rules! bare_closure_impl {
         ///   function pointers, you will need to use the [`bare_hrtb`] macro to define a wrapper
         ///   type.
         /// - `S`: The dynamically-sized type to use to type-erase the closure. Use this to enforce
-        ///   lifetime bounds and marker traits which the closure must satsify, e.g. `S = dyn Send +
+        ///   lifetime bounds and marker traits which the closure must satisfy, e.g. `S = dyn Send +
         ///   'a`. Without the `unstable` feature, this is limited to [`dyn Any`](Any) and
         ///   combinations of [`Send`] and [`Sync`] marker types.
         /// - `A`: The [`JitAlloc`] implementation used to allocate and free executable memory.

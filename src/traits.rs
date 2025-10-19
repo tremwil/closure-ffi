@@ -161,9 +161,9 @@ pub unsafe trait FnPtr: Sized + Copy + Send + Sync {
 /// crates.
 ///
 /// # Why implement on tuples?
-/// Implenting on (calling-convention, closure) tuples instead of only the closure is done for two
+/// Implementing on (calling-convention, closure) tuples instead of only the closure is done for two
 /// reasons:
-/// - It allows type-infering `B` from the calling convention and a closure with annotated
+/// - It allows type-inferring `B` from the calling convention and a closure with annotated
 ///   parameters, which is highly desirable for the constructor API of [`BareFn`](crate::BareFn) and
 ///   friends.
 /// - The [`bare_hrtb`](crate::bare_hrtb) macro can be used by downstream crates to generate
@@ -193,9 +193,9 @@ pub unsafe trait FnOnceThunk<B: FnPtr>: Sized {
 /// crates.
 ///
 /// # Why implement on tuples?
-/// Implenting on (calling-convention, closure) tuples instead of only the closure is done for two
+/// Implementing on (calling-convention, closure) tuples instead of only the closure is done for two
 /// reasons:
-/// - It allows type-infering `B` from the calling convention and a closure with annotated
+/// - It allows type-inferring `B` from the calling convention and a closure with annotated
 ///   parameters, which is highly desirable for the constructor API of [`BareFn`](crate::BareFn) and
 ///   friends.
 /// - The [`bare_hrtb`](crate::bare_hrtb) macro can be used by downstream crates to generate
@@ -226,9 +226,9 @@ pub unsafe trait FnMutThunk<B: FnPtr>: FnOnceThunk<B> {
 /// crates.
 ///
 /// # Why implement on tuples?
-/// Implenting on (calling-convention, closure) tuples instead of only the closure is done for two
+/// Implementing on (calling-convention, closure) tuples instead of only the closure is done for two
 /// reasons:
-/// - It allows type-infering `B` from the calling convention and a closure with annotated
+/// - It allows type-inferring `B` from the calling convention and a closure with annotated
 ///   parameters, which is highly desirable for the constructor API of [`BareFn`](crate::BareFn) and
 ///   friends.
 /// - The [`bare_hrtb`](crate::bare_hrtb) macro can be used by downstream crates to generate
