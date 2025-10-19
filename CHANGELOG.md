@@ -1,5 +1,26 @@
 # Changelog
 
+## [v5.0.0] - 2025-10-19
+
+### Breaking Changes
+- Compiling with a Thumb JSON target file will now require Nightly Rust.
+- With the addition of the `safe_jit` feature, compiling with `--no-default-features` will now error
+unless the `no_safe_jit` feature is explicitly enabled to prevent accidentally forgetting to enable `safe_jit`.
+- Strengthened trait bounds on `FnPtr::CC` to make some APIs more ergonomic. This is technically a breaking change but is realistically harmless, as `FnPtr` should not be implemented by the end user. 
+- Changed the `JitAlloc` blanket impl from `&J` for all `J: JitAlloc` to any type implementing `Deref<Target = J>`. This is more general and avoids having to write forwarding impls when putting a `JitAlloc` in a `LazyLock`, for example, but may break some downstream `JitAlloc` wrappers.
+
+### Added
+- Thunk generation is now fully safe thanks to the `safe_jit` feature, which uses a disassembler to properly relocate the prologue code instead of assuming it is trivially relocatable. This brings an end to this crate's UB issues.
+
+- Support for the `efiapi` and `Rust` calling conventions.
+
+### Fixed
+- `global_jit_alloc` macro ambiguous parsing for the unsafe block variant.
+- Incorrect relocation of thunk prologues on `i686-unknown-linux-gnu`.
+
+### Removed
+- i686-specific Windows calling conventions from x64 Windows targets.
+
 ## [v4.1.0] - 2025-09-23
 
 ### Changed
