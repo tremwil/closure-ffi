@@ -2,14 +2,14 @@ use alloc::{borrow::Cow, vec::Vec};
 
 use capstone::{InsnGroupId, InsnGroupType};
 
-#[cfg_attr(target_arch = "aarch64", path = "arm_common/encoding_aarch64.rs")]
+#[cfg_attr(target_arch = "aarch64", path = "arm_util/encoding_aarch64.rs")]
 #[cfg_attr(
     all(target_arch = "arm", not(thumb_mode)),
-    path = "arm_common/encoding_arm.rs"
+    path = "arm_util/encoding_arm.rs"
 )]
 #[cfg_attr(
     all(target_arch = "arm", thumb_mode),
-    path = "arm_common/encoding_thumb.rs"
+    path = "arm_util/encoding_thumb.rs"
 )]
 pub mod encoding;
 
@@ -167,7 +167,7 @@ macro_rules! bitflags {
             }
 
             $(
-                $crate::safe_jit::arm_common::bitflags_field! {
+                $crate::safe_jit::arm_util::bitflags_field! {
                     ($t, $($signed_ty)?) $fvis $getter $($setter $($try_setter)?)?: $start .. $end
                 }
             )*
@@ -176,7 +176,7 @@ macro_rules! bitflags {
         impl ::core::fmt::Debug for $name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 f.debug_struct(stringify!($name))
-                    $(.field(stringify!($getter), &crate::safe_jit::arm_common::FmtDecBin(self.$getter())))*
+                    $(.field(stringify!($getter), &crate::safe_jit::arm_util::FmtDecBin(self.$getter())))*
                     .finish()
             }
         }

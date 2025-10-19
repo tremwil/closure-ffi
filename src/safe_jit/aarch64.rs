@@ -6,7 +6,7 @@ use capstone::{
 };
 
 use crate::safe_jit::{
-    arm_common::{
+    arm_util::{
         encoding::{Adr, Branch, LdrImm, LdrImmOpc, LdrOfs},
         has_unsupported_insn_group, CowBuffer,
     },
