@@ -163,7 +163,7 @@ This is very fast at runtime, since most work is done at compile time and the cr
 ## Non-capturing closures
 
 If the `Fn` impl is a zero-sized type, such as a non-capturing closure or a function item, it is possible to "conjure" a valid reference to the type from a dangling pointer. Hence a thunk template like this is valid for all instances of the closure:
-```rust
+```rust,ignore
 unsafe extern "C" fn thunk(arg0: usize) -> usize {
     let closure_ptr: *const F = core::ptr::dangling();
     (&*closure_ptr)(arg0)
@@ -171,7 +171,7 @@ unsafe extern "C" fn thunk(arg0: usize) -> usize {
 ```
 
 This optimization lets closure-ffi thunk this kind of closure without allocating or emitting any code at runtime, making `BareFn` a quasi zero-cost abstraction. For example, consider the following code:
-```rust
+```rust,ignore
 extern "C" fn takes_fn(cb: unsafe extern "C" fn(u32) -> u32) { 
     // do something ...
 }
