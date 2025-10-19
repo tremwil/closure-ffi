@@ -63,61 +63,23 @@ pub trait JitAlloc {
     unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize);
 }
 
-impl<J: JitAlloc> JitAlloc for &J {
+impl<J: JitAlloc, D: Deref<Target = J>> JitAlloc for D {
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-        (*self).alloc(size)
+        (**self).alloc(size)
     }
 
     unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-        (*self).release(rx_ptr)
+        (**self).release(rx_ptr)
     }
 
     #[inline(always)]
     unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-        (*self).flush_instruction_cache(rx_ptr, size);
+        (**self).flush_instruction_cache(rx_ptr, size);
     }
 
     #[inline(always)]
     unsafe fn protect_jit_memory(&self, ptr: *const u8, size: usize, access: ProtectJitAccess) {
-        (*self).protect_jit_memory(ptr, size, access);
-    }
-}
-
-#[cfg(feature = "std")]
-impl<J: JitAlloc> JitAlloc for std::sync::LazyLock<J> {
-    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-        self.deref().alloc(size)
-    }
-
-    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-        self.deref().release(rx_ptr)
-    }
-
-    unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-        self.deref().flush_instruction_cache(rx_ptr, size);
-    }
-
-    unsafe fn protect_jit_memory(&self, ptr: *const u8, size: usize, access: ProtectJitAccess) {
-        self.deref().protect_jit_memory(ptr, size, access);
-    }
-}
-
-#[cfg(feature = "default_jit_alloc")]
-impl<J: JitAlloc, R: spin::RelaxStrategy> JitAlloc for spin::lazy::Lazy<J, fn() -> J, R> {
-    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-        self.deref().alloc(size)
-    }
-
-    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-        self.deref().release(rx_ptr)
-    }
-
-    unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-        self.deref().flush_instruction_cache(rx_ptr, size);
-    }
-
-    unsafe fn protect_jit_memory(&self, ptr: *const u8, size: usize, access: ProtectJitAccess) {
-        self.deref().protect_jit_memory(ptr, size, access);
+        (**self).protect_jit_memory(ptr, size, access);
     }
 }
 
@@ -125,7 +87,7 @@ impl<J: JitAlloc, R: spin::RelaxStrategy> JitAlloc for spin::lazy::Lazy<J, fn() 
 /// The default, global JIT allocator.
 ///
 /// When the `default_jit_alloc` feature is enabled, this is currently implemented as a ZST
-/// deffering to a static [`jit_allocator2::JitAllocator`] behind a [`std::sync::Mutex`] (or a
+/// deferring to a static [`jit_allocator2::JitAllocator`] behind a [`std::sync::Mutex`] (or a
 /// [`spin::Mutex`] under `no_std`).
 ///
 /// When the `default_jit_alloc` feature is not enabled, defers to a [`JitAlloc`] implementation
