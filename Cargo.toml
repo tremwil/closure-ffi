@@ -36,6 +36,7 @@ safe_jit = [
     "dep:iced-x86",
     "dep:capstone"
 ]
+no_safe_jit = []
 unstable = []
 tuple_trait = ["unstable"]
 c_variadic = ["unstable"]
