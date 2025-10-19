@@ -1,5 +1,3 @@
-#![cfg(feature = "std")]
-
 mod slab_alloc;
 
 #[allow(unused_imports)]
