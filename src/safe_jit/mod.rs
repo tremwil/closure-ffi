@@ -21,7 +21,7 @@ mod arm;
 use arm::try_reloc_thunk_template;
 
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-mod arm_common;
+mod arm_util;
 
 #[derive(Clone, Copy, Debug)]
 #[allow(unused)]

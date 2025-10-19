@@ -7,7 +7,7 @@
 
 use capstone::arch::arm::ArmInsn;
 
-use crate::safe_jit::arm_common::{bitflags, EncodingError};
+use crate::safe_jit::arm_util::{bitflags, EncodingError};
 
 pub const PC_OFFSET: usize = 4;
 
