@@ -120,33 +120,6 @@ mod default_jit_alloc {
         jit_allocator2::flush_instruction_cache(rx_ptr, size);
     }
 
-    #[cfg(feature = "std")]
-    #[doc(hidden)]
-    impl JitAlloc for std::sync::Mutex<JitAllocator> {
-        fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-            self.lock().unwrap().alloc(size).map_err(|_| JitAllocError)
-        }
-
-        unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-            self.lock().unwrap().release(rx_ptr).map_err(|_| JitAllocError)
-        }
-
-        #[inline(always)]
-        unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-            flush_instruction_cache(rx_ptr, size);
-        }
-
-        #[inline(always)]
-        unsafe fn protect_jit_memory(
-            &self,
-            _ptr: *const u8,
-            _size: usize,
-            access: ProtectJitAccess,
-        ) {
-            jit_allocator2::protect_jit_memory(convert_access(access));
-        }
-    }
-
     #[cfg(not(feature = "std"))]
     static GLOBAL_JIT_ALLOC: spin::Mutex<Option<alloc::boxed::Box<JitAllocator>>> =
         spin::Mutex::new(None);
