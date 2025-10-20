@@ -55,15 +55,15 @@ features = ["no_std", "instr_info", "decoder", "encoder"]
 optional = true
 
 [target.'cfg(target_arch = "aarch64")'.dependencies.capstone]
-git = "https://github.com/capstone-rust/capstone-rs.git"
-rev = "4ed86fb8099e96498c50e90306dcd7f84db67960"
+package = "capstone-git"
+version = "=0.13.0-commit4ed86fb"
 default-features = false
 features = ["full", "arch_arm64"]
 optional = true
 
 [target.'cfg(target_arch = "arm")'.dependencies.capstone]
-git = "https://github.com/capstone-rust/capstone-rs.git"
-rev = "4ed86fb8099e96498c50e90306dcd7f84db67960"
+package = "capstone-git"
+version = "=0.13.0-commit4ed86fb"
 default-features = false
 features = ["full", "arch_arm"]
 optional = true

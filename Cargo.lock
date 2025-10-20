@@ -21,18 +21,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2261d10cca569e4643e526d8dc2e62e433cc8aba21ab764233731f8d369bf394"
 
 [[package]]
-name = "capstone"
-version = "0.13.0"
-source = "git+https://github.com/capstone-rust/capstone-rs.git?rev=4ed86fb8099e96498c50e90306dcd7f84db67960#4ed86fb8099e96498c50e90306dcd7f84db67960"
+name = "capstone-git"
+version = "0.13.0-commit4ed86fb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e9dd4619ea21e336236594e90ecbf4e288acffb6d5f53914f697722b0156efa"
 dependencies = [
- "capstone-sys",
+ "capstone-sys-git",
  "static_assertions",
 ]
 
 [[package]]
-name = "capstone-sys"
-version = "0.17.0"
-source = "git+https://github.com/capstone-rust/capstone-rs.git?rev=4ed86fb8099e96498c50e90306dcd7f84db67960#4ed86fb8099e96498c50e90306dcd7f84db67960"
+name = "capstone-sys-git"
+version = "0.17.0-commit4ed86fb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72ca814cb91173fc5e93fd2943d64bd775b65fcd731ea8cbd5b210c1b78698d9"
 dependencies = [
  "cc",
 ]
@@ -71,9 +73,9 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
- "capstone",
+ "capstone-git",
  "clear-cache",
  "closure-ffi-proc-macros",
  "iced-x86",
@@ -86,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi-proc-macros"
-version = "5.0.0"
+version = "6.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
