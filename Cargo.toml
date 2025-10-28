@@ -11,7 +11,7 @@ repository = "https://github.com/tremwil/closure-ffi"
 
 [package]
 name = "closure-ffi"
-version = "5.0.0"
+version = "5.0.1"
 description = "FFI utility for creating bare function pointers that invoke a closure"
 edition.workspace = true
 authors.workspace = true
@@ -33,7 +33,7 @@ global_jit_alloc = []
 # Sadly there is no way to enable a dependency when a feature is *not* set
 default_jit_alloc = ["global_jit_alloc", "dep:jit-allocator2", "dep:spin"]
 safe_jit = [
-    "dep:iced-x86",
+    "iced-x86/std",
     "dep:capstone"
 ]
 no_safe_jit = []
@@ -49,7 +49,8 @@ jit-allocator2 = {version = "0.2.9", optional = true }
 spin = { version = "0.10", optional = true }
 
 [target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies.iced-x86]
-version = "1.21"
+package = "closure-ffi-iced-x86"
+version = "1.21.0-commit50066fb"
 default-features = false
 features = ["no_std", "instr_info", "decoder", "encoder"]
 optional = true

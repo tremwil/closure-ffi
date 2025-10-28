@@ -73,17 +73,26 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi"
-version = "5.0.0"
+version = "5.0.1"
 dependencies = [
  "capstone-git",
  "clear-cache",
+ "closure-ffi-iced-x86",
  "closure-ffi-proc-macros",
- "iced-x86",
  "jit-allocator2",
  "libc",
  "region",
  "rustflags",
  "spin 0.10.0",
+]
+
+[[package]]
+name = "closure-ffi-iced-x86"
+version = "1.21.0-commit50066fb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87f5da827759602d2f4c9225d519db7798eef3825973f7afb62739acac1df91d"
+dependencies = [
+ "lazy_static",
 ]
 
 [[package]]
@@ -110,15 +119,6 @@ name = "find-msvc-tools"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52051878f80a721bb68ebfbc930e07b65ba72f2da88968ea5c06fd6ca3d3a127"
-
-[[package]]
-name = "iced-x86"
-version = "1.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c447cff8c7f384a7d4f741cfcff32f75f3ad02b406432e8d6c878d56b1edf6b"
-dependencies = [
- "lazy_static",
-]
 
 [[package]]
 name = "intrusive-collections"
