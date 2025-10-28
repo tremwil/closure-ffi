@@ -1,5 +1,10 @@
 # Changelog
 
+## [v5.0.1] - 2025-10-28
+
+### Fixed
+- Use forked `iced-x86` crate to avoid conflicts with dependents using it with the `std` feature. This is temporary until a new iced version is released to allow `std` and `no_std` features to be enabled at the same time.
+
 ## [v5.0.0] - 2025-10-19
 
 ### Breaking Changes
