@@ -246,50 +246,26 @@ cc_impl!(SystemUnwind, "system-unwind");
 
 cc_impl!(Efiapi, "efiapi");
 
-cc_impl!(Sysv64, "sysv64", all(not(windows), target_arch = "x86_64"));
-cc_impl!(
-    Sysv64Unwind,
-    "sysv64-unwind",
-    all(not(windows), target_arch = "x86_64")
-);
+cc_impl!(Sysv64, "sysv64", target_arch = "x86_64");
+cc_impl!(Sysv64Unwind, "sysv64-unwind", target_arch = "x86_64");
+
+cc_impl!(Win64, "win64", target_arch = "x86_64");
+cc_impl!(Win64Unwind, "win64-unwind", target_arch = "x86_64");
 
 cc_impl!(Aapcs, "aapcs", target_arch = "arm");
 cc_impl!(AapcsUnwind, "aapcs-unwind", target_arch = "arm");
 
-cc_impl!(Fastcall, "fastcall", all(windows, target_arch = "x86"));
-cc_impl!(
-    FastcallUnwind,
-    "fastcall-unwind",
-    all(windows, target_arch = "x86")
-);
+cc_impl!(Fastcall, "fastcall", target_arch = "x86");
+cc_impl!(FastcallUnwind, "fastcall-unwind", target_arch = "x86");
 
-cc_impl!(Stdcall, "stdcall", all(windows, target_arch = "x86"));
-cc_impl!(
-    StdcallUnwind,
-    "stdcall-unwind",
-    all(windows, target_arch = "x86")
-);
+cc_impl!(Stdcall, "stdcall", target_arch = "x86");
+cc_impl!(StdcallUnwind, "stdcall-unwind", target_arch = "x86");
 
-cc_impl!(Cdecl, "cdecl", all(windows, target_arch = "x86"));
-cc_impl!(
-    CdeclUnwind,
-    "cdecl-unwind",
-    all(windows, target_arch = "x86")
-);
+cc_impl!(Cdecl, "cdecl", target_arch = "x86");
+cc_impl!(CdeclUnwind, "cdecl-unwind", target_arch = "x86");
 
-cc_impl!(Thiscall, "thiscall", all(windows, target_arch = "x86"));
-cc_impl!(
-    ThiscallUnwind,
-    "thiscall-unwind",
-    all(windows, target_arch = "x86")
-);
-
-cc_impl!(Win64, "win64", all(windows, target_arch = "x86_64"));
-cc_impl!(
-    Win64Unwind,
-    "win64-unwind",
-    all(windows, target_arch = "x86_64")
-);
+cc_impl!(Thiscall, "thiscall", target_arch = "x86");
+cc_impl!(ThiscallUnwind, "thiscall-unwind", target_arch = "x86");
 
 #[cfg(feature = "c_variadic")]
 macro_rules! cc_thunk_impl_triple_variadic {
