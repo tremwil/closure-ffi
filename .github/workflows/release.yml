@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: crates.io publish
-        run: cargo +nightly -Z package-workspace publish --workspace --token ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo publish --workspace --token ${{ secrets.CRATES_IO_TOKEN }}
         
       - name: Get package version
         id: get_version
