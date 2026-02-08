@@ -12,8 +12,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
-      - run: cargo +nightly fmt --check
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
 
   check:
     name: cargo clippy
@@ -28,18 +31,18 @@ jobs:
           - -F proc_macros
           - -F tuple_trait,c_variadic,coverage
         include:
-          - setup: ""
+          - toolchain: stable
           - features: -F tuple_trait,c_variadic,coverage
-            setup: |
-              rustup toolchain install nightly
-              rustup default nightly
-              rustup component add --toolchain nightly clippy
-
+            toolchain: nightly
 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ${{ matrix.setup }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
       - run: RUSTFLAGS="-Dwarnings" cargo clippy --workspace --all-targets ${{ matrix.features }}
 
   doc:
@@ -47,10 +50,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: RUSTFLAGS="--cfg docsrs" cargo +nightly doc --no-deps -F proc_macros
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --no-deps -F proc_macros
 
-  build_and_test:
-    name: Build and test
+  build-and-test-native:
+    name: Build and test (native)
     strategy:
       fail-fast: false
       matrix:
@@ -67,32 +72,83 @@ jobs:
             runner: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
             runner: macos-latest
+          - target: arm64ec-pc-windows-msvc
+            runner: windows-11-arm
+          - target: i686-unknown-linux-gnu
+            runner: ubuntu-latest
         features:
           - "-F proc_macros"
           - "-F tuple_trait,c_variadic,coverage"
-          - "--no-default-features -F no_safe_jit,global_jit_alloc"
-        profile:
-          - dev
-          - release
+          - "--no-default-features -F global_jit_alloc"
         include:
-          - nightly: ''
+          - toolchain: stable
+          - packages: ""
+          # Enable nightly rust for the nightly feature
           - features: "-F tuple_trait,c_variadic,coverage"
-            nightly: +nightly
+            toolchain: nightly
+          # Install gcc-multilib to cross-build for x86
+          - target: i686-unknown-linux-gnu
+            packages: "gcc-multilib"
     
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
     runs-on: ${{ matrix.target.runner }}
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          rustup ${{ matrix.nightly }} target add ${{ matrix.target.target }}
-          cargo ${{ matrix.nightly }} test --target ${{ matrix.target.target }} --profile ${{ matrix.profile }} 
+      - name: Install required system packages
+        run: apt-get install -y ${{ matrix.packages }}
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and test (debug)
+        id: test-debug
+        run: cargo test --target ${{ matrix.target.target }} ${{ matrix.features }}
+      - name: Build and test (release)
+        if: ${{ success() || steps.test-debug.conclusion == 'failure' }}
+        run: cargo test --target ${{ matrix.target.target }} --release ${{ matrix.features }}
   
+  build-and-test-cross:
+    name: Build and test (cross-rs)
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - armv7-unknown-linux-gnueabi
+          - armv7-unknown-linux-gnueabihf
+          - thumbv7neon-unknown-linux-gnueabihf
+        features:
+          - "-F proc_macros"
+          - "-F tuple_trait,c_variadic,coverage"
+          - "--no-default-features -F global_jit_alloc"
+        include:
+          - nightly: ""
+          # Enable nightly rust for the nightly feature
+          - features: "-F tuple_trait,c_variadic,coverage"
+            nightly: +nightly
+
+    needs: [fmt, check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup cargo binstall
+        uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo cross 
+        run: cargo binstall cross
+      - name: Build and test (debug)
+        id: test-debug
+        run: cross ${{ matrix.nightly }} test --target ${{ matrix.target }} ${{ matrix.features }}
+      - name: Build and test (release)
+        if: ${{ success() || steps.test-debug.conclusion == 'failure' }}
+        run: cross ${{ matrix.nightly }} test --target ${{ matrix.target }} ${{ matrix.features }}
+
   all_checks_pass:
     needs:
       - fmt
       - check
       - doc
-      - build_and_test
+      - build-and-test-native
     runs-on: ubuntu-latest
     steps:
     - name: Decide whether the needed jobs succeeded or failed
