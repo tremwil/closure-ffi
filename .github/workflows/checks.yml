@@ -79,7 +79,7 @@ jobs:
         features:
           - "-F proc_macros"
           - "-F tuple_trait,c_variadic,coverage"
-          - "--no-default-features -F global_jit_alloc"
+          - "--no-default-features -F safe_jit,global_jit_alloc"
         include:
           - toolchain: stable
           - packages: ""
@@ -121,7 +121,7 @@ jobs:
         features:
           - "-F proc_macros"
           - "-F tuple_trait,c_variadic,coverage"
-          - "--no-default-features -F global_jit_alloc"
+          - "--no-default-features -F safe_jit,global_jit_alloc"
         include:
           - nightly: ""
           # Enable nightly rust for the nightly feature
