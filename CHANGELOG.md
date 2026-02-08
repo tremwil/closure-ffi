@@ -4,7 +4,7 @@
 
 ### Added
 - Calling convention marker types are no longer limited by operating system, but purely target architecture.
-- CI tests for additional targets (`arm64ec` Windows, `armv7` and `thumbv7` Linux)
+- CI tests for additional targets: `armv7` (soft and hard float) and `thumbv7` Linux
 
 ### Fixed
 - C-variadic calling convention support (was broken by changes to the nightly feature)
