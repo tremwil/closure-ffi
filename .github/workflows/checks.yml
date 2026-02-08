@@ -68,14 +68,14 @@ jobs:
             runner: macos-15-intel
           - target: i686-pc-windows-msvc
             runner: windows-latest
+          - target: i686-unknown-linux-gnu
+            runner: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
             runner: macos-latest
           - target: arm64ec-pc-windows-msvc
             runner: windows-11-arm
-          - target: i686-unknown-linux-gnu
-            runner: ubuntu-latest
         features:
           - "-F proc_macros"
           - "-F tuple_trait,c_variadic,coverage"
@@ -87,7 +87,8 @@ jobs:
           - features: "-F tuple_trait,c_variadic,coverage"
             toolchain: nightly
           # Install gcc-multilib to cross-build for x86
-          - target: i686-unknown-linux-gnu
+          - target:
+              target: i686-unknown-linux-gnu
             packages: "gcc-multilib"
     
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
