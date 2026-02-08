@@ -8,7 +8,7 @@ use closure_ffi::BareFnMut;
 mod slab_alloc;
 use slab_alloc::SLAB;
 
-unsafe extern "system" {
+unsafe extern "C" {
     fn vsprintf(buf: *mut u8, fmt: *const u8, va: VaList<'_>);
 }
 
