@@ -96,7 +96,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install required system packages
-        run: apt-get install -y ${{ matrix.packages }}
+        run: sudo apt-get install -y ${{ matrix.packages }}
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
