@@ -82,21 +82,17 @@ jobs:
           - "--no-default-features -F safe_jit,global_jit_alloc"
         include:
           - toolchain: stable
-          - packages: ""
           # Enable nightly rust for the nightly feature
           - features: "-F tuple_trait,c_variadic,coverage"
             toolchain: nightly
-          # Install gcc-multilib to cross-build for x86
-          - target:
-              target: i686-unknown-linux-gnu
-            packages: "gcc-multilib"
     
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
     runs-on: ${{ matrix.target.runner }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install required system packages
-        run: sudo apt-get install -y ${{ matrix.packages }}
+      - name: Install gcc-multilib for i686 cross-compilation
+        if: ${{ matrix.target.target == 'i686-unknown-linux-gnu' }}
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
