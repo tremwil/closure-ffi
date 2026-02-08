@@ -55,16 +55,15 @@ closure-ffi currently supports the following platforms (with some features being
 | `x86_64` (unix) | ✅ | ✅ | ✅ (linux) | 
 | `x86_64` (windows) | ✅ | ✅ | ✅ (msvc) |
 | `x86_64` (none) | ✅ | ❌ | ❌ |
-| `i686` (unix) | required (*) | ✅ | ❌ |
+| `i686` (unix) | required (*) | ✅ | ✅ |
 | `i686` (windows) | ✅ | ✅ | ✅ (msvc) |
 | `i686` (none) | ✅ | ❌ | ❌ |
 | `aarch64-apple-darwin` | ✅ (**) | ✅ | ✅ |
 | `aarch64` (unix) | ✅ (**) | ✅ | ✅ (linux) | 
-| `aarch64` (windows) | ✅ (**) | ✅ | ❌ |
 | `aarch64` (none) | ✅ (**) | ❌ | ❌ |
-| `arm` (linux) | ✅ (**) | ✅ | ❌ |
+| `arm` (linux) | ✅ (**) | ✅ | ✅ |
 | `arm` (none) | ✅ (**) | ❌ | ❌ |
-| `thumbv7` (linux) | ✅ (**) | ✅ | ❌ |
+| `thumbv7` (linux) | ✅ (**) | ✅ | ✅ |
 | `thumbv7` (none) | ✅ (**) | ❌ | ❌ |
 
 *(\*)*: The feature is required as disabling it would lead to incorrect code being emitted.

@@ -1,6 +1,6 @@
 #![cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")))]
 
-use closure_ffi::{global_jit_alloc, BareFn, BareFnMut};
+use closure_ffi::{BareFn, BareFnMut};
 
 mod slab_alloc;
 
