@@ -1,4 +1,7 @@
 #![cfg(feature = "default_jit_alloc")]
+// qemu-arm is unable to correctly model W^X dual-mapped memory (without software MMU),
+// so we can't test the default jit allocator on ARM
+#![cfg(not(target_arch = "arm"))]
 
 #[allow(unused_imports)]
 use closure_ffi::{traits::FnPtr, BareFn, BareFnMut, BareFnOnce};

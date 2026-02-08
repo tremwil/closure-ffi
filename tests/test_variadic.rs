@@ -1,9 +1,12 @@
-#![cfg(all(feature = "default_jit_alloc", feature = "c_variadic"))]
+#![cfg(feature = "c_variadic")]
 #![feature(c_variadic)]
 
 use std::ffi::{CStr, VaList};
 
 use closure_ffi::BareFnMut;
+
+mod slab_alloc;
+use slab_alloc::SLAB;
 
 #[cfg(not(all(target_arch = "x86", target_os = "windows")))]
 unsafe extern "C" {
@@ -20,9 +23,12 @@ fn test_variadic() {
     let mut buf = [0u8; 128];
     let fmt = b"dec = %d, hex = %llX, chr = %c, pi = %.2f\0";
 
-    let bare_fn = BareFnMut::new_variadic(|va: VaList| unsafe {
-        vsprintf(buf.as_mut_ptr(), fmt.as_ptr(), va);
-    });
+    let bare_fn = BareFnMut::new_variadic_in(
+        |va: VaList| unsafe {
+            vsprintf(buf.as_mut_ptr(), fmt.as_ptr(), va);
+        },
+        &SLAB,
+    );
 
     unsafe { bare_fn.bare()(42, 0xDEADBEEF123u64, '?', core::f64::consts::PI) }
     drop(bare_fn);
