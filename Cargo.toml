@@ -11,7 +11,7 @@ repository = "https://github.com/tremwil/closure-ffi"
 
 [package]
 name = "closure-ffi"
-version = "5.1.1"
+version = "5.1.2"
 description = "FFI utility for creating bare function pointers that invoke a closure"
 edition.workspace = true
 authors.workspace = true
@@ -44,7 +44,7 @@ coverage = ["unstable"]
 proc_macros = ["dep:closure-ffi-proc-macros"]
 
 [dependencies]
-closure-ffi-proc-macros = { path = "proc_macros", version = "6.0.1", optional = true }
+closure-ffi-proc-macros = { path = "proc_macros", version = "6.0.2", optional = true }
 jit-allocator2 = {version = "0.2.9", optional = true }
 spin = { version = "0.10", optional = true }
 

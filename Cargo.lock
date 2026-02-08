@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi"
-version = "5.1.1"
+version = "5.1.2"
 dependencies = [
  "capstone-git",
  "clear-cache",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "closure-ffi-proc-macros"
-version = "6.0.1"
+version = "6.0.2"
 dependencies = [
  "proc-macro2",
  "quote",
