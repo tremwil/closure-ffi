@@ -280,7 +280,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
         #[doc(hidden)]
         unsafe impl<R, $($id_tys),*> $crate::traits::FnPtr for unsafe extern $cconv_lit fn($($tys,)* ...) -> R {
             type CC = $cconv;
-            type Args<'a, 'b, 'c> = ($($tys,)* core::ffi::VaListImpl<'a>,);
+            type Args<'a, 'b, 'c> = ($($tys,)* core::ffi::VaList<'a>,);
             type Ret<'a, 'b, 'c> = R;
 
             #[allow(unused_variables)]
@@ -310,7 +310,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
                 // needed to create a HRTB closure
                 #[inline(always)]
                 fn coerce<R, $($id_tys,)* F>(fun: F) -> F
-                where F: for<'va> FnOnce($($tys,)* core::ffi::VaListImpl<'va>) -> R {
+                where F: for<'va> FnOnce($($tys,)* core::ffi::VaList<'va>) -> R {
                     fun
                 }
                 let coerced = coerce(move |$($args,)* va| fun(($($args,)* va,)));
@@ -324,7 +324,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
             {
                 #[inline(always)]
                 fn coerce<R, $($id_tys,)* F>(fun: F) -> F
-                where F: for<'va> FnMut($($tys,)* core::ffi::VaListImpl<'va>) -> R {
+                where F: for<'va> FnMut($($tys,)* core::ffi::VaList<'va>) -> R {
                     fun
                 }
                 let coerced = coerce(move |$($args,)* va| fun(($($args,)* va,)));
@@ -338,7 +338,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
             {
                 #[inline(always)]
                 fn coerce<R, $($id_tys,)* F>(fun: F) -> F
-                where F: for<'va> Fn($($tys,)* core::ffi::VaListImpl<'va>) -> R {
+                where F: for<'va> Fn($($tys,)* core::ffi::VaList<'va>) -> R {
                     fun
                 }
                 let coerced = coerce(move |$($args,)* va| fun(($($args,)* va,)));
@@ -347,14 +347,14 @@ macro_rules! cc_thunk_impl_triple_variadic {
         }
 
         #[doc(hidden)]
-        unsafe impl<F: for<'va> FnOnce($($tys,)* core::ffi::VaListImpl<'va>) -> R, R, $($id_tys),*>
+        unsafe impl<F: for<'va> FnOnce($($tys,)* core::ffi::VaList<'va>) -> R, R, $($id_tys),*>
             $crate::traits::FnOnceThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE_ONCE: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F, R, $($id_tys),*>($($args: $tys,)* va_args: ...) -> R
                 where
-                    F: for<'va> FnOnce($($tys,)* core::ffi::VaListImpl<'va>) -> R
+                    F: for<'va> FnOnce($($tys,)* core::ffi::VaList<'va>) -> R
                 {
                     if const { core::mem::size_of::<F>() == 0 } {
                         let fun: F = unsafe { core::mem::zeroed() };
@@ -382,14 +382,14 @@ macro_rules! cc_thunk_impl_triple_variadic {
         }
 
         #[doc(hidden)]
-        unsafe impl<F: for<'va> FnMut($($tys,)* core::ffi::VaListImpl<'va>) -> R, R, $($id_tys),*>
+        unsafe impl<F: for<'va> FnMut($($tys,)* core::ffi::VaList<'va>) -> R, R, $($id_tys),*>
             $crate::traits::FnMutThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE_MUT: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F, R, $($id_tys),*>($($args: $tys,)* va_args: ...) -> R
                 where
-                    F: for<'va> FnMut($($tys,)* core::ffi::VaListImpl<'va>) -> R
+                    F: for<'va> FnMut($($tys,)* core::ffi::VaList<'va>) -> R
                 {
                     if const { core::mem::size_of::<F>() == 0 } {
                         let fun: &mut F = unsafe { &mut *core::ptr::dangling_mut() };
@@ -417,14 +417,14 @@ macro_rules! cc_thunk_impl_triple_variadic {
         }
 
         #[doc(hidden)]
-        unsafe impl<F: for<'va> Fn($($tys,)* core::ffi::VaListImpl<'va>) -> R, R, $($id_tys),*>
+        unsafe impl<F: for<'va> Fn($($tys,)* core::ffi::VaList<'va>) -> R, R, $($id_tys),*>
             $crate::traits::FnThunk<unsafe extern $cconv_lit fn($($tys,)* ...) -> R> for ($cconv, F)
         {
             const THUNK_TEMPLATE: *const u8 = {
                 #[cfg_attr(feature = "coverage", coverage(off))]
                 unsafe extern $cconv_lit fn thunk<F, R, $($id_tys),*>($($args: $tys,)* va_args: ...) -> R
                 where
-                    F: for<'va> Fn($($tys,)* core::ffi::VaListImpl<'va>) -> R
+                    F: for<'va> Fn($($tys,)* core::ffi::VaList<'va>) -> R
                 {
                     if const { core::mem::size_of::<F>() == 0 } {
                         let fun: &F = unsafe { &*core::ptr::dangling_mut() };

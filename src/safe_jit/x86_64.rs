@@ -19,6 +19,8 @@ pub fn try_reloc_thunk_template<'a>(
 
     let mut instructions = Vec::new();
     let mut instruction = Instruction::default();
+
+    let mut max_jcc_offset = 0;
     let mut num_ip_rel_reloc = 0;
     let mut thunk_asm_offset = None;
 
@@ -28,9 +30,19 @@ pub fn try_reloc_thunk_template<'a>(
         if instruction.is_invalid() {
             return Err(JitError::InvalidInstruction);
         }
-        else if instruction.flow_control() != FlowControl::Next {
-            return Err(JitError::UnsupportedInstruction);
-        }
+
+        match instruction.flow_control() {
+            FlowControl::Next => (),
+            // SysV64 variadic functions store the number of floating point arguments in rax.
+            // As an optimization, rustc generated prologues for this checks rax before saving
+            // xmm registers to the stack. So we allow conditional branches, so long as their
+            // target is within the prologue (tbd after finding the thunk asm offset).
+            FlowControl::ConditionalBranch if instruction.is_jcc_short_or_near() => {
+                let offset = instruction.near_branch_target().wrapping_sub(ip);
+                max_jcc_offset = max_jcc_offset.max(offset);
+            }
+            _ => return Err(JitError::UnsupportedInstruction),
+        };
 
         let needs_reloc = instruction.is_ip_rel_memory_operand();
         if needs_reloc {
@@ -47,6 +59,12 @@ pub fn try_reloc_thunk_template<'a>(
     }
 
     let thunk_asm_offset = thunk_asm_offset.ok_or(JitError::NoThunkAsm)?;
+
+    // Make sure all JCC instructions in the prologue have targets inside of it
+    if max_jcc_offset > thunk_asm_offset as u64 {
+        return Err(JitError::UnsupportedControlFlow);
+    }
+
     if num_ip_rel_reloc == 0 {
         return Ok(RelocThunk {
             thunk: thunk_template.into(),

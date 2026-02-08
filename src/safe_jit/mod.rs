@@ -28,6 +28,7 @@ mod arm_util;
 enum JitError {
     InvalidInstruction,
     UnsupportedInstruction,
+    UnsupportedControlFlow,
     NoAvailableRegister,
     EncodingError,
     NoThunkAsm,
