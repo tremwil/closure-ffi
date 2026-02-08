@@ -1,6 +1,6 @@
 # Changelog
 
-## [v5.1.1] - 2026-02-08
+## [v5.1.2] - 2026-02-08
 
 ### Added
 - Calling convention marker types are no longer limited by operating system, but purely target architecture.
