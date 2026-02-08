@@ -1,5 +1,15 @@
 # Changelog
 
+## [v5.1.1] - 2026-02-08
+
+### Added
+- Calling convention marker types are no longer limited by operating system, but purely target architecture.
+- CI tests for additional targets (`arm64ec` Windows, `armv7` and `thumbv7` Linux)
+
+### Fixed
+- C-variadic calling convention support (was broken by changes to the nightly feature)
+- Linker errors on x86 for platforms that don't allow absolute relocations in code sections
+
 ## [v5.0.1] - 2025-10-28
 
 ### Fixed
