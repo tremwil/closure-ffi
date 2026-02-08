@@ -21,18 +21,20 @@ pub mod consts {
         unsafe { core::mem::transmute_copy(&LockPushRax([0xF0; 14], [0xFF, 0xF0])) }
     };
 
+    pub const THUNK_RETURN_OFFSET: usize = size_of::<Magic>();
+    pub const THUNK_EXTRA_SIZE: isize = THUNK_RETURN_OFFSET as isize;
+
     #[cfg(target_arch = "x86")]
     mod inner {
-        pub const THUNK_EXTRA_SIZE: isize = -4;
         pub const CLOSURE_ADDR_OFFSET: isize = -15;
+        pub const THUNK_RETURN_ADDR_OFFSET: isize = -10;
         pub const THUNK_CODE_OFFSET: isize = -16;
     }
 
     #[cfg(target_arch = "x86_64")]
     mod inner {
-        pub const THUNK_RETURN_OFFSET: usize = size_of::<super::Magic>();
-        pub const THUNK_EXTRA_SIZE: isize = THUNK_RETURN_OFFSET as isize;
         pub const CLOSURE_ADDR_OFFSET: isize = 0;
+        pub const THUNK_RETURN_ADDR_OFFSET: isize = 8;
     }
 
     pub(crate) use inner::*;
@@ -58,6 +60,7 @@ pub mod consts {
     pub(super) const THUNK_RETURN_OFFSET: usize = 2 * size_of::<usize>();
     pub(super) const THUNK_EXTRA_SIZE: isize = THUNK_RETURN_OFFSET as isize;
     pub(super) const CLOSURE_ADDR_OFFSET: isize = 0;
+    pub(super) const THUNK_RETURN_ADDR_OFFSET: isize = size_of::<usize>() as isize;
 }
 
 // We perform aligned reads at the pointer size, so make sure the align is sufficient
@@ -97,12 +100,13 @@ macro_rules! _thunk_asm {
         ::core::arch::asm!(
             ".balign 8",
             "movl $0xC0DEC0DE, {cl_addr}",
-            "movl $1f, {jmp_addr}",
+            "movl $0xC0DEC0DE, {jmp_addr}",
             "jmp *{jmp_addr}",
+            // the above 3 instructions are 12 bytes, so we need 4 of padding for
+            // proper alignment of the magic constant
             ".4byte 0xCCCCCCCC",
             ".8byte {cl_magic_0}",
             ".8byte {cl_magic_1}",
-            "1:",
             cl_magic_0 = const { $crate::arch::consts::CLOSURE_ADDR_MAGIC[0] },
             cl_magic_1 = const { $crate::arch::consts::CLOSURE_ADDR_MAGIC[1] },
             cl_addr = out(reg) $closure_ptr,
@@ -258,19 +262,15 @@ impl<J: JitAlloc> AllocatedThunk<J> {
             .cast::<*const ()>()
             .write_unaligned(closure_ptr);
 
-        // On x86, we use a PE/ELF relocation to load the return address instead
-        #[cfg(not(target_arch = "x86"))]
-        {
-            // Write the jump back to the compiler-generated thunk
-            let thunk_return =
-                thunk_template_ptr.add(template_magic_offset + consts::THUNK_RETURN_OFFSET);
-            // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
-            #[cfg(thumb_mode)]
-            let thunk_return = thunk_return.map_addr(|a| a | 1);
-            rw.add(magic_offset + size_of::<usize>())
-                .cast::<*const u8>()
-                .write(thunk_return);
-        }
+        // Write the jump back to the compiler-generated thunk
+        let thunk_return =
+            thunk_template_ptr.add(template_magic_offset + consts::THUNK_RETURN_OFFSET);
+        // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
+        #[cfg(thumb_mode)]
+        let thunk_return = thunk_return.map_addr(|a| a | 1);
+        rw.add(magic_offset.wrapping_add_signed(consts::THUNK_RETURN_ADDR_OFFSET))
+            .cast::<*const u8>()
+            .write_unaligned(thunk_return);
 
         jit.protect_jit_memory(thunk_rx, thunk.len(), ProtectJitAccess::ReadExecute);
         jit.flush_instruction_cache(thunk_rx, thunk.len());
