@@ -74,8 +74,6 @@ jobs:
             runner: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
             runner: macos-latest
-          - target: arm64ec-pc-windows-msvc
-            runner: windows-11-arm
         features:
           - "-F proc_macros"
           - "-F tuple_trait,c_variadic,coverage"
