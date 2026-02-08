@@ -149,6 +149,7 @@ jobs:
       - check
       - doc
       - build-and-test-native
+      - build-and-test-cross
     runs-on: ubuntu-latest
     steps:
     - name: Decide whether the needed jobs succeeded or failed
