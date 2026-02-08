@@ -3,7 +3,7 @@
 use closure_ffi::{global_jit_alloc, BareFn, BareFnMut};
 
 mod slab_alloc;
-use slab_alloc::SlabAlloc::SLAB;
+use slab_alloc::SLAB;
 
 global_jit_alloc!(SLAB);
 
