@@ -220,7 +220,8 @@ mod default_jit_alloc {
 #[doc(inline)]
 pub use default_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
 
-/// Defines a global [`JitAlloc`] implementation which [`GlobalJitAlloc`] will defer to.
+/// Defines a global [`JitAlloc`] implementation which [`GlobalJitAlloc`] will defer to, provided
+/// that the `default_jit_alloc` feature is not enabled. Otherwise the latter takes priority.
 ///
 /// The macro can either take a path to a static variable or an unsafe block resolving to a
 /// `&'static JitAlloc`:
@@ -242,14 +243,8 @@ pub use default_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
 /// The block form must be marked with `unsafe` as sometimes returning a different impl can lead to
 /// UB, and you are responsible to make sure this doesn't happen.
 #[macro_export]
-#[cfg(any(
-    docsrs,
-    all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")),
-))]
-#[cfg_attr(
-    docsrs,
-    doc(cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc"))))
-)]
+#[cfg(any(docsrs, feature = "global_jit_alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "global_jit_alloc")))]
 macro_rules! global_jit_alloc {
     (unsafe $provider:block) => {
         #[no_mangle]
@@ -266,14 +261,8 @@ macro_rules! global_jit_alloc {
         }
     };
 }
-#[cfg(any(
-    docsrs,
-    all(feature = "global_jit_alloc", not(feature = "default_jit_alloc"))
-))]
-#[cfg_attr(
-    docsrs,
-    doc(cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc"))))
-)]
+#[cfg(any(docsrs, feature = "global_jit_alloc"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "global_jit_alloc")))]
 pub use global_jit_alloc;
 
 #[cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")))]

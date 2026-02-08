@@ -8,13 +8,7 @@ use closure_ffi::BareFnMut;
 mod slab_alloc;
 use slab_alloc::SLAB;
 
-#[cfg(not(all(target_arch = "x86", target_os = "windows")))]
-unsafe extern "C" {
-    fn vsprintf(buf: *mut u8, fmt: *const u8, va: VaList<'_>);
-}
-
-#[cfg(all(target_arch = "x86", target_os = "windows"))]
-unsafe extern "stdcall" {
+unsafe extern "system" {
     fn vsprintf(buf: *mut u8, fmt: *const u8, va: VaList<'_>);
 }
 

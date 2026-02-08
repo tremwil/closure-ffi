@@ -9,6 +9,8 @@
 ### Fixed
 - C-variadic calling convention support (was broken by changes to the nightly feature)
 - Linker errors on x86 for platforms that don't allow absolute relocations in code sections
+- Make `global_jit_alloc`-written code compatible with `default_jit_alloc`. With this configuration,
+  the allocator provided by the `global_jit_alloc!` macro will be ignored.
 
 ## [v5.0.1] - 2025-10-28
 
