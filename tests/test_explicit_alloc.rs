@@ -1,14 +1,8 @@
-mod slab_alloc;
-
 #[allow(unused_imports)]
 use closure_ffi::{cc, BareFn, BareFnMut, BareFnOnce, UntypedBareFn};
-use slab_alloc::SlabAlloc;
 
-#[cfg(feature = "std")]
-static SLAB: std::sync::LazyLock<SlabAlloc> = std::sync::LazyLock::new(|| SlabAlloc::new(0x10000));
-
-#[cfg(not(feature = "std"))]
-static SLAB: spin::Lazy<SlabAlloc> = spin::Lazy::new(|| SlabAlloc::new(0x10000));
+mod slab_alloc;
+use slab_alloc::SLAB;
 
 #[test]
 fn test_stateless_fn() {

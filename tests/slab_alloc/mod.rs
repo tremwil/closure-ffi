@@ -3,6 +3,13 @@ use core::sync::atomic::AtomicUsize;
 use closure_ffi::{JitAlloc, JitAllocError};
 use region::{Allocation, Protection};
 
+#[cfg(feature = "std")]
+pub static SLAB: std::sync::LazyLock<SlabAlloc> =
+    std::sync::LazyLock::new(|| SlabAlloc::new(0x10000));
+
+#[cfg(not(feature = "std"))]
+pub static SLAB: spin::Lazy<SlabAlloc> = spin::Lazy::new(|| SlabAlloc::new(0x10000));
+
 pub struct SlabAlloc {
     buf: Allocation,
     offset: AtomicUsize,
@@ -42,18 +49,7 @@ impl JitAlloc for SlabAlloc {
     }
 
     unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-        #[cfg(not(target_arch = "arm"))]
         clear_cache::clear_cache(rx_ptr, rx_ptr.add(size));
-        #[cfg(all(target_arch = "arm", target_os = "linux"))]
-        unsafe {
-            const __ARM_NR_CACHEFLUSH: i32 = 0x0f0002;
-            libc::syscall(
-                __ARM_NR_CACHEFLUSH,
-                rx_ptr as usize as u64,
-                (rx_ptr as usize + size) as u64,
-                0,
-            );
-        }
     }
 
     unsafe fn protect_jit_memory(

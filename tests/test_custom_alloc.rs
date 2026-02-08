@@ -1,20 +1,11 @@
 #![cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")))]
 
-mod slab_alloc;
-
 use closure_ffi::{global_jit_alloc, BareFn, BareFnMut};
-use slab_alloc::SlabAlloc;
 
-#[cfg(feature = "std")]
-static SLAB: std::sync::LazyLock<SlabAlloc> = std::sync::LazyLock::new(|| SlabAlloc::new(0x10000));
-#[cfg(feature = "std")]
+mod slab_alloc;
+use slab_alloc::SlabAlloc::SLAB;
+
 global_jit_alloc!(SLAB);
-
-#[cfg(not(feature = "std"))]
-global_jit_alloc!(unsafe {
-    static SLAB: spin::Lazy<SlabAlloc> = spin::Lazy::new(|| SlabAlloc::new(0x10000));
-    &*SLAB
-});
 
 #[test]
 fn test_stateless_fn() {
