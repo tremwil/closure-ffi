@@ -95,7 +95,7 @@ The following function signatures are supported:
 
 - Lifetime-generic (a.k.a. higher-kinded) bare functions, e.g. `for<'a, 'b> unsafe extern "C" fn(&'a CStr, &'b CStr) -> &'a CStr` through the `bare_hrtb!` macro (requires the `proc_macros` feature).
 
-- Variadic C functions e.g. `unsafe extern "C" printf(*const c_char, ...)` are supported when the `c_variadic` crate and nightly feature are enabled.
+- Variadic C functions e.g. `unsafe extern "C" printf(*const c_char, ...)` are supported, with the limitation that they cannot be invoked through `FnPtr::call`.
 
 ## Features Flags
 
@@ -126,7 +126,6 @@ The crate comes with the following feature flags:
 - `tuple_trait`: Adds a [`core::marker::Tuple`](https://doc.rust-lang.org/nightly/core/marker/trait.Tuple.html)
   bound on `FnPtr::Args`. This allows downstream crates to easily integrate the library with closure-related
   nightly features such as `unboxed_closures` and `fn_traits`.
-- `c_variadic`: Adds *partial* (no invocation through `call`) `FnPtr` and `Fn*Thunk` implementations for variadic functions.
 - `coverage`: Enables support for the `-C instrument-coverage` compiler flag.
 
 # How it Works

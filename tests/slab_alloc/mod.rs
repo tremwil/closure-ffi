@@ -8,7 +8,7 @@ pub static SLAB: std::sync::LazyLock<SlabAlloc> =
     std::sync::LazyLock::new(|| SlabAlloc::new(0x10000));
 
 #[cfg(not(feature = "std"))]
-pub static SLAB: spin::Lazy<SlabAlloc> = spin::Lazy::new(|| SlabAlloc::new(0x10000));
+pub static SLAB: spin::LazyLock<SlabAlloc> = spin::LazyLock::new(|| SlabAlloc::new(0x10000));
 
 #[cfg(feature = "global_jit_alloc")]
 closure_ffi::global_jit_alloc!(SLAB);
@@ -38,7 +38,7 @@ impl JitAlloc for SlabAlloc {
 
         let offset = self
             .offset
-            .fetch_update(Relaxed, Relaxed, |offset| {
+            .try_update(Relaxed, Relaxed, |offset| {
                 (size + offset <= self.buf.len()).then_some(size + offset)
             })
             .map_err(|_| JitAllocError)?;
