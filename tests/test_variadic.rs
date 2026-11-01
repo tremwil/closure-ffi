@@ -9,6 +9,7 @@ mod variadic {
 
     use super::slab_alloc::SLAB;
 
+    #[cfg_attr(target_env = "msvc", link(name = "legacy_stdio_definitions"))]
     unsafe extern "C" {
         fn vsprintf(buf: *mut u8, fmt: *const u8, va: VaList<'_>);
     }
