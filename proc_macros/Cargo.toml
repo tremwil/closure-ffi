@@ -1,6 +1,6 @@
 [package]
 name = "closure-ffi-proc-macros"
-version = "6.0.2"
+version = "6.1.0"
 description = "Proc macros used and exported by the closure-ffi crate"
 edition.workspace = true
 authors.workspace = true
@@ -13,6 +13,6 @@ repository.workspace = true
 proc-macro = true
 
 [dependencies]
-syn = { version = "2.0", features = ["full", "visit", "visit-mut"] }
-proc-macro2 = "1.0"
-quote = "1.0"
+syn = { version = "3.0.9", features = ["full", "visit", "visit-mut"] }
+proc-macro2 = "1.0.107"
+quote = "1.0.47"

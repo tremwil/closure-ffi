@@ -4,7 +4,6 @@
 // This example will not compile without the default JIT allocator.
 #![cfg(feature = "default_jit_alloc")]
 #![cfg_attr(feature = "tuple_trait", feature(unboxed_closures))]
-#![cfg_attr(feature = "tuple_trait", feature(tuple_trait))]
 #![cfg_attr(feature = "tuple_trait", feature(fn_traits))]
 
 use core::marker::PhantomData;

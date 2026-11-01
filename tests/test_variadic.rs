@@ -1,32 +1,34 @@
-#![cfg(feature = "c_variadic")]
-#![feature(c_variadic)]
-
-use std::ffi::{CStr, VaList};
-
-use closure_ffi::BareFnMut;
-
+#[rustversion::since(1.99)]
 mod slab_alloc;
-use slab_alloc::SLAB;
 
-unsafe extern "C" {
-    fn vsprintf(buf: *mut u8, fmt: *const u8, va: VaList<'_>);
-}
+#[rustversion::since(1.99)]
+mod variadic {
+    use std::ffi::{CStr, VaList};
 
-#[test]
-fn test_variadic() {
-    let mut buf = [0u8; 128];
-    let fmt = b"dec = %d, hex = %llX, chr = %c, pi = %.2f\0";
+    use closure_ffi::BareFnMut;
 
-    let bare_fn = BareFnMut::new_variadic_in(
-        |va: VaList| unsafe {
-            vsprintf(buf.as_mut_ptr(), fmt.as_ptr(), va);
-        },
-        &SLAB,
-    );
+    use super::slab_alloc::SLAB;
 
-    unsafe { bare_fn.bare()(42, 0xDEADBEEF123u64, '?', core::f64::consts::PI) }
-    drop(bare_fn);
+    unsafe extern "C" {
+        fn vsprintf(buf: *mut u8, fmt: *const u8, va: VaList<'_>);
+    }
 
-    let formatted = CStr::from_bytes_until_nul(&buf).unwrap().to_string_lossy();
-    assert_eq!(formatted, "dec = 42, hex = DEADBEEF123, chr = ?, pi = 3.14");
+    #[test]
+    fn test_variadic() {
+        let mut buf = [0u8; 128];
+        let fmt = b"dec = %d, hex = %llX, chr = %c, pi = %.2f\0";
+
+        let bare_fn = BareFnMut::new_variadic_in(
+            |va: VaList| unsafe {
+                vsprintf(buf.as_mut_ptr(), fmt.as_ptr(), va);
+            },
+            &SLAB,
+        );
+
+        unsafe { bare_fn.bare()(42, 0xDEADBEEF123u64, '?', core::f64::consts::PI) }
+        drop(bare_fn);
+
+        let formatted = CStr::from_bytes_until_nul(&buf).unwrap().to_string_lossy();
+        assert_eq!(formatted, "dec = 42, hex = DEADBEEF123, chr = ?, pi = 3.14");
+    }
 }

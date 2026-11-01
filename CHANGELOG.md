@@ -1,5 +1,14 @@
 # Changelog
 
+## [v5.2.0] - 2026-01-11
+
+### Changed
+
+- closure-ffi-proc-macros now depends on syn 3.0.
+- closure-ffi now depends on upstream iced and capstone crates.
+- Support for variadic calling conventions on stable Rust (1.99.0+).
+- Removed `c_variadic` feature flag. This is not considered SemVer breaking as it was nightly only.
+
 ## [v5.1.2] - 2026-02-08
 
 ### Added

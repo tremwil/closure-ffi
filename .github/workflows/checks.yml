@@ -29,10 +29,10 @@ jobs:
           - --no-default-features -F std,safe_jit,global_jit_alloc
           - ""
           - -F proc_macros
-          - -F tuple_trait,c_variadic,coverage
+          - -F tuple_trait,coverage
         include:
           - toolchain: stable
-          - features: -F tuple_trait,c_variadic,coverage
+          - features: -F tuple_trait,coverage
             toolchain: nightly
 
     runs-on: ubuntu-latest
@@ -76,12 +76,12 @@ jobs:
             runner: macos-latest
         features:
           - "-F proc_macros"
-          - "-F tuple_trait,c_variadic,coverage"
+          - "-F tuple_trait,coverage"
           - "--no-default-features -F safe_jit,global_jit_alloc"
         include:
           - toolchain: stable
           # Enable nightly rust for the nightly feature
-          - features: "-F tuple_trait,c_variadic,coverage"
+          - features: "-F tuple_trait,coverage"
             toolchain: nightly
     
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
@@ -115,12 +115,12 @@ jobs:
           - thumbv7neon-unknown-linux-gnueabihf
         features:
           - "-F proc_macros"
-          - "-F tuple_trait,c_variadic,coverage"
+          - "-F tuple_trait,coverage"
           - "--no-default-features -F safe_jit,global_jit_alloc"
         include:
           - nightly: ""
           # Enable nightly rust for the nightly feature
-          - features: "-F tuple_trait,c_variadic,coverage"
+          - features: "-F tuple_trait,coverage"
             nightly: +nightly
 
     needs: [fmt, check]
