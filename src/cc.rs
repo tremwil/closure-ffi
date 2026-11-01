@@ -267,7 +267,7 @@ cc_impl!(CdeclUnwind, "cdecl-unwind", target_arch = "x86");
 cc_impl!(Thiscall, "thiscall", target_arch = "x86");
 cc_impl!(ThiscallUnwind, "thiscall-unwind", target_arch = "x86");
 
-#[cfg(feature = "c_variadic")]
+#[rustversion::since(1.99)]
 macro_rules! cc_thunk_impl_triple_variadic {
     (
         $cconv:ty,
@@ -457,7 +457,7 @@ macro_rules! cc_thunk_impl_triple_variadic {
 ///
 /// This is a separate marker type to enable richer type inference.
 #[derive(Debug, Clone, Copy, Default)]
-#[cfg(any(doc, feature = "c_variadic"))]
+#[rustversion::since(1.99)]
 pub struct Variadic;
-#[cfg(feature = "c_variadic")]
+#[rustversion::since(1.99)]
 cc_trait_impl!(Variadic, "C", cc_thunk_impl_triple_variadic);

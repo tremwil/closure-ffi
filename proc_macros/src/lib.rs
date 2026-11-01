@@ -9,7 +9,7 @@ struct MacroInput {
     thunk_attrs: Vec<syn::Attribute>,
     crate_path: syn::Path,
     alias: syn::ItemType,
-    bare_fn: syn::TypeBareFn,
+    bare_fn: syn::TypeFnPtr,
 }
 
 impl syn::parse::Parse for MacroInput {
@@ -20,7 +20,7 @@ impl syn::parse::Parse for MacroInput {
         let alias: syn::ItemType = input.parse()?;
 
         match &*alias.ty {
-            syn::Type::BareFn(bare_fn) => {
+            syn::Type::FnPtr(bare_fn) => {
                 if let Some(lt) = &bare_fn.lifetimes {
                     if lt.lifetimes.len() > 3 {
                         return Err(syn::Error::new_spanned(
@@ -47,7 +47,7 @@ impl syn::parse::Parse for MacroInput {
                     }
                 }
                 let mut implicit_lt_check = HasImplicitBoundLt(Vec::default());
-                implicit_lt_check.visit_type_bare_fn(bare_fn);
+                implicit_lt_check.visit_type_fn_ptr(bare_fn);
 
                 let mut implicit_lt_err = None;
                 for err_span in implicit_lt_check.0 {
@@ -81,31 +81,35 @@ impl syn::parse::Parse for MacroInput {
     }
 }
 
-fn bare_fn_to_trait_bound(fun: &syn::TypeBareFn, mut path: syn::Path) -> syn::TraitBound {
+fn bare_fn_to_trait_bound(fun: &syn::TypeFnPtr, mut path: syn::Path) -> syn::TraitBound {
     let fn_part = path.segments.last_mut().unwrap();
     fn_part.arguments = syn::PathArguments::Parenthesized(syn::ParenthesizedGenericArguments {
         paren_token: Default::default(),
-        inputs: fun.inputs.iter().map(|arg| arg.ty.clone()).collect(),
+        inputs: fun.inputs.iter().cloned().collect(),
         output: fun.output.clone(),
     });
 
     syn::TraitBound {
         paren_token: None,
-        modifier: syn::TraitBoundModifier::None,
+        modifiers: syn::TraitBoundModifiers::default(),
         lifetimes: fun.lifetimes.clone(),
+        maybe: None,
         path,
     }
 }
 
 fn bare_fn_to_sig(
-    fun: &syn::TypeBareFn,
+    fun: &syn::TypeFnPtr,
     ident: syn::Ident,
     arg_idents: &[syn::Ident],
 ) -> syn::Signature {
     syn::Signature {
         constness: None,
         asyncness: None,
-        unsafety: fun.unsafety,
+        safety: match fun.unsafety {
+            Some(unsafety) => syn::Safety::Unsafe(unsafety),
+            None => syn::Safety::Default,
+        },
         abi: fun.abi.clone(),
         fn_token: syn::Token![fn](pm2::Span::call_site()),
         ident,
@@ -192,10 +196,8 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
     .visit_signature_mut(&mut thunk_sig);
 
     let f_ident = syn::Ident::new("_F", pm2::Span::call_site());
-    let cc_marker_ident = syn::Ident::new(
-        &format!("{}_CC", &input.alias.ident),
-        pm2::Span::call_site(),
-    );
+    let cc_marker_ident =
+        syn::Ident::new(&format!("{}_CC", input.alias.ident), pm2::Span::call_site());
     let crate_path = &input.crate_path;
     let thunk_attrs = &input.thunk_attrs;
     let alias_ident = &input.alias.ident;
@@ -316,7 +318,6 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
             ident: f_ident.clone(),
             colon_token: Some(syn::Token![:](pm2::Span::call_site())),
             bounds: [syn::TypeParamBound::Trait(fn_bound)].into_iter().collect(),
-            eq_token: None,
             default: None,
         }));
 
@@ -382,6 +383,7 @@ pub fn bare_hrtb(tokens: TokenStream) -> TokenStream {
     let tuple_args = bare_fn.inputs.iter().map(|i| &i.ty);
     let bare_fn_output = match &bare_fn.output {
         syn::ReturnType::Default => &syn::Type::Tuple(syn::TypeTuple {
+            attrs: vec![],
             paren_token: syn::token::Paren(pm2::Span::call_site()),
             elems: syn::punctuated::Punctuated::new(),
         }),

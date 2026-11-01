@@ -714,6 +714,14 @@ macro_rules! bare_closure_impl {
 
             cc_shorthand!(new_efiabi, $trait_ident, cc::Efiapi, "efiapi");
 
+            #[rustversion::since(1.99)]
+            cc_shorthand!(
+                new_variadic,
+                $trait_ident,
+                cc::Variadic,
+                "`C` variadic"
+            );
+
             cc_shorthand!(
                 new_sysv64,
                 $trait_ident,
@@ -769,14 +777,6 @@ macro_rules! bare_closure_impl {
                 "win64",
                 all(windows, target_arch = "x86_64")
             );
-
-            cc_shorthand!(
-                new_variadic,
-                $trait_ident,
-                cc::Variadic,
-                "`C` variadic",
-                feature = "c_variadic"
-            );
         }
 
         impl<B: FnPtr, S: ?Sized, A: JitAlloc> $ty_name<B, S, A> {
@@ -787,6 +787,14 @@ macro_rules! bare_closure_impl {
             cc_shorthand_in!(new_system_in, $trait_ident, cc::System, "system");
 
             cc_shorthand_in!(new_efiabi_in, $trait_ident, cc::Efiapi, "efiapi");
+
+            #[rustversion::since(1.99)]
+            cc_shorthand_in!(
+                new_variadic_in,
+                $trait_ident,
+                cc::Variadic,
+                "`C` variadic"
+            );
 
             cc_shorthand_in!(
                 new_sysv64_in,
@@ -842,14 +850,6 @@ macro_rules! bare_closure_impl {
                 cc::Win64,
                 "win64",
                 all(windows, target_arch = "x86_64")
-            );
-
-            cc_shorthand_in!(
-                new_variadic_in,
-                $trait_ident,
-                cc::Variadic,
-                "`C` variadic",
-                feature = "c_variadic"
             );
         }
 
