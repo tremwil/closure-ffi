@@ -9,6 +9,10 @@
 - Support for variadic calling conventions on stable Rust (1.99.0+).
 - Removed `c_variadic` feature flag. This is not considered SemVer breaking as it was nightly only.
 
+### Fixed
+
+- `CHANGELOG.md` missing links.
+
 ## [v5.1.2] - 2026-02-08
 
 ### Added
@@ -204,3 +208,20 @@ release.
 
 ### Fixed
 - ARM/Thumb support
+
+[v5.2.0]: https://github.com/tremwil/closure-ffi/compare/v5.1.2...v5.2.0
+[v5.1.2]: https://github.com/tremwil/closure-ffi/compare/v5.0.1...v5.1.2
+[v5.0.1]: https://github.com/tremwil/closure-ffi/compare/v5.0.0...v5.0.1
+[v5.0.0]: https://github.com/tremwil/closure-ffi/compare/v4.1.0...v5.0.0
+[v4.1.0]: https://github.com/tremwil/closure-ffi/compare/v4.0.0...v4.1.0
+[v4.0.0]: https://github.com/tremwil/closure-ffi/compare/v3.0.1...v4.0.0
+[v3.0.1]: https://github.com/tremwil/closure-ffi/compare/v3.0.0...v3.0.1
+[v3.0.0]: https://github.com/tremwil/closure-ffi/compare/v2.4.0...v3.0.0
+[v2.4.0]: https://github.com/tremwil/closure-ffi/compare/v2.3.0...v2.4.0
+[v2.3.0]: https://github.com/tremwil/closure-ffi/compare/v2.2.0...v2.3.0
+[v2.2.0]: https://github.com/tremwil/closure-ffi/compare/v2.1.0...v2.2.0
+[v2.1.0]: https://github.com/tremwil/closure-ffi/compare/v2.0.1...v2.1.0
+[v2.0.1]: https://github.com/tremwil/closure-ffi/compare/v2.0.0...v2.0.1
+[v2.0.0]: https://github.com/tremwil/closure-ffi/compare/v0.5.0...v2.0.0
+[v0.5.0]: https://github.com/tremwil/closure-ffi/compare/v0.4.0...v0.5.0
+[v0.4.0]: https://github.com/tremwil/closure-ffi/tree/v0.4.0
