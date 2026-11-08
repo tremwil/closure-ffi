@@ -456,8 +456,8 @@ macro_rules! cc_thunk_impl_triple_variadic {
 /// Marker type representing the C variadic calling convention.
 ///
 /// This is a separate marker type to enable richer type inference.
-#[derive(Debug, Clone, Copy, Default)]
 #[rustversion::since(1.99)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Variadic;
 #[rustversion::since(1.99)]
 cc_trait_impl!(Variadic, "C", cc_thunk_impl_triple_variadic);
