@@ -1,12 +1,13 @@
 #![cfg(feature = "default_jit_alloc")]
 
+use alloc::collections::BTreeMap;
 use core::{
     alloc::Layout,
+    ops::Bound::{Excluded, Unbounded},
     ptr::NonNull,
     sync::atomic::{AtomicUsize, Ordering::Relaxed},
 };
 
-use alloc::collections::BTreeMap;
 use rlsf::{FlexSource, FlexTlsf};
 
 #[cfg(unix)]
@@ -22,10 +23,16 @@ pub struct JitTlsf {
 #[derive(Debug)]
 struct Source {
     granularity: AtomicUsize,
+
+    /// Maps past-the-end pointers of rw blocks to past-the-end pointers of rx blocks.
     rw_to_rx: BTreeMap<*mut u8, *const u8>,
+
+    /// Maps past-the-end pointers of rx blocks to past-the-end pointers of rw blocks.
     rx_to_rw: BTreeMap<*const u8, *mut u8>,
 }
 
+/// Using the allocator on macOS requires this guard which calls `pthread_jit_write_protect_np`
+/// on [`Self::new`] and on [`Self::drop`].
 struct JitWriteProtect;
 
 impl JitTlsf {
@@ -43,9 +50,17 @@ impl JitTlsf {
             self.inner.allocate(layout).ok_or(JitAllocError)?.as_ptr()
         };
 
-        let (rw_end, rx_end) =
-            self.inner.source_ref().rw_to_rx.range(rw..).next().ok_or(JitAllocError)?;
+        // Matching an in-block pointer against past-the-end we don't want to include
+        // the end of a previous block by accident.
+        let (rw_end, rx_end) = self
+            .inner
+            .source_ref()
+            .rw_to_rx
+            .range((Excluded(&rw), Unbounded))
+            .next()
+            .ok_or(JitAllocError)?;
 
+        // Calculate offset in rx from the end.
         let offset = unsafe { rw_end.offset_from_unsigned(rw) };
         let rx = unsafe { rx_end.sub(offset) };
 
@@ -53,9 +68,17 @@ impl JitTlsf {
     }
 
     pub unsafe fn release(&mut self, rx: *const u8) -> Result<(), JitAllocError> {
-        let (rx_end, rw_end) =
-            self.inner.source_ref().rx_to_rw.range(rx..).next().ok_or(JitAllocError)?;
+        // Matching an in-block pointer against past-the-end we don't want to include
+        // the end of a previous block by accident.
+        let (rx_end, rw_end) = self
+            .inner
+            .source_ref()
+            .rx_to_rw
+            .range((Excluded(&rx), Unbounded))
+            .next()
+            .ok_or(JitAllocError)?;
 
+        // Calculate offset in rw from the end.
         let offset = unsafe { rx_end.offset_from_unsigned(rx) };
         let rw = unsafe { rw_end.sub(offset) };
 
@@ -130,7 +153,9 @@ unsafe impl Sync for Source {}
 impl JitWriteProtect {
     fn new() -> Self {
         #[cfg(target_os = "macos")]
-        libc::pthread_jit_write_protect_np(0);
+        unsafe {
+            libc::pthread_jit_write_protect_np(0);
+        }
         Self
     }
 }
@@ -138,6 +163,8 @@ impl JitWriteProtect {
 impl Drop for JitWriteProtect {
     fn drop(&mut self) {
         #[cfg(target_os = "macos")]
-        libc::pthread_jit_write_protect_np(1);
+        unsafe {
+            libc::pthread_jit_write_protect_np(1);
+        }
     }
 }

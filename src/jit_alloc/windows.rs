@@ -39,7 +39,7 @@ pub unsafe fn map_rx_rw(size: usize) -> Option<(*const u8, *mut u8)> {
             INVALID_HANDLE_VALUE,
             ptr::null_mut(),
             PAGE_EXECUTE_READWRITE,
-            (size >> 32) as DWORD,
+            ((size as u64) >> 32) as DWORD,
             size as DWORD,
             ptr::null_mut(),
         );
@@ -48,6 +48,7 @@ pub unsafe fn map_rx_rw(size: usize) -> Option<(*const u8, *mut u8)> {
             return None;
         }
 
+        // Setting `dwNumberOfBytesToMap` to 0 maps the entire file.
         let rx = MapViewOfFile(mapping, FILE_MAP_READ | FILE_MAP_EXECUTE, 0, 0, 0);
 
         if rx.is_null() {

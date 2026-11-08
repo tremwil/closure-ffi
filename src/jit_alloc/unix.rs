@@ -1,8 +1,9 @@
 #![cfg(all(unix, feature = "default_jit_alloc"))]
 #![allow(clippy::unnecessary_cast, clippy::useless_conversion)]
 
+use alloc::{borrow::ToOwned, format};
 use core::{
-    ffi::{c_char, c_int, CStr},
+    ffi::{c_char, c_int, c_uint, CStr},
     hash::{Hash, Hasher},
     hint,
     ops::ControlFlow,
@@ -10,12 +11,11 @@ use core::{
     sync::atomic::{AtomicU32, Ordering::Relaxed},
 };
 
-use alloc::{borrow::ToOwned, format};
 use libc::{
-    clock_gettime, close, dup, fclose, fileno, ftruncate, getenv, getpid, gettid, mmap, munmap,
-    off_t, open, size_t, sysconf, tmpfile, _SC_PAGESIZE, CLOCK_MONOTONIC, CLOCK_REALTIME,
-    MAP_FAILED, MAP_SHARED, O_CREAT, O_EXCL, O_RDWR, PROT_EXEC, PROT_READ, PROT_WRITE, S_IRUSR,
-    S_IWUSR,
+    clock_gettime, close, dup, fclose, fileno, ftruncate, getenv, getpid, mmap, munmap, off_t,
+    open, size_t, sysconf, tmpfile, _SC_PAGESIZE, CLOCK_MONOTONIC, CLOCK_REALTIME, MAP_ANONYMOUS,
+    MAP_FAILED, MAP_PRIVATE, MAP_SHARED, O_CREAT, O_EXCL, O_RDWR, PROT_EXEC, PROT_READ, PROT_WRITE,
+    S_IRUSR, S_IWUSR,
 };
 
 #[allow(unused)]
@@ -42,13 +42,16 @@ pub fn map_granularity() -> usize {
 /// `size` must be a multiple of the value returned by [`map_granularity`].
 pub unsafe fn map_rx_rw(size: usize) -> Option<(*const u8, *mut u8)> {
     debug_assert!(size.is_multiple_of(map_granularity()));
+
+    // Use a single backing fd for all maps by calling `ftruncate` and `mmap`-ing
+    // at an offset.
     BackingFd::with_global(|fd| unsafe { fd.mmap_rx_rw(size, 0) })?
 }
 
 #[derive(Debug)]
 struct BackingFd {
     fd: c_int,
-    offset: usize,
+    size: usize,
 }
 
 impl BackingFd {
@@ -69,72 +72,136 @@ impl BackingFd {
         Some(action(fd))
     }
 
+    /// Opens a fd that can be mapped as executable.
     fn open() -> Option<Self> {
-        fn try_open(page_size: size_t, fd_src: impl FnOnce() -> c_int) -> ControlFlow<BackingFd> {
+        /// Tries mapping a fd as executable memory. A security policy might disallow this
+        /// for example when /dev/shm or /tmp are mounted as noexec.
+        fn try_map(page_size: size_t, fd: c_int) -> ControlFlow<BackingFd> {
             unsafe {
-                let fd = fd_src();
-
-                if fd == -1 {
-                    return ControlFlow::Continue(());
+                let (prot, flags) = if fd == -1 {
+                    (PROT_RWX, MAP_PRIVATE | MAP_ANONYMOUS)
                 }
-
-                if ftruncate(fd, page_size as off_t) == -1 {
-                    close(fd);
-                    return ControlFlow::Continue(());
+                else if cfg!(target_os = "macos") {
+                    (PROT_RWX, MAP_PRIVATE)
                 }
+                else {
+                    (PROT_RX, MAP_SHARED)
+                };
 
-                let rx = mmap(ptr::null_mut(), page_size, PROT_RX, MAP_SHARED, fd, 0);
+                #[cfg(target_os = "macos")]
+                let flags = flags | libc::MAP_JIT;
+
+                let rx = mmap(ptr::null_mut(), page_size, prot, flags, fd, 0);
 
                 if rx == MAP_FAILED {
-                    close(fd);
                     return ControlFlow::Continue(());
                 }
 
                 munmap(rx, page_size);
 
-                ControlFlow::Break(BackingFd { fd, offset: 0 })
+                ControlFlow::Break(BackingFd { fd, size: 0 })
             }
         }
 
+        fn try_map_resize(page_size: size_t, fd: c_int) -> ControlFlow<BackingFd> {
+            unsafe {
+                if fd != -1 {
+                    if ftruncate(fd, page_size as off_t) != -1 {
+                        try_map(page_size, fd)?;
+                    }
+
+                    close(fd);
+                }
+
+                ControlFlow::Continue(())
+            }
+        }
+
+        /// Attempts multiple strategies for opening a fd that can be mapped as executable.
+        ///
+        /// The first one to succeed is used:
+        ///
+        /// 1. `memfd_create` (Linux only)
+        /// 2. `shm_open` with `SHM_ANON` (FreeBSD only)
+        /// 3. `shm_open` with a randomly assigned name
+        /// 4. `tmpfile` into `fileno`
+        /// 5. `open` in /tmp with a randomly assigned name
+        ///
+        /// If all else fails anonymous RWX mappings will be used.
         fn do_open(page_size: usize) -> ControlFlow<BackingFd> {
-            try_open(page_size, open_linux)?;
-            try_open(page_size, open_freebsd)?;
-            try_open(page_size, open_named_shm)?;
-            try_open(page_size, open_tmpfile)?;
-            try_open(page_size, open_in_tmpdir)
+            try_map_resize(page_size, open_linux())?;
+            try_map_resize(page_size, open_freebsd())?;
+            try_map_resize(page_size, open_named_shm())?;
+            try_map_resize(page_size, open_tmpfile())?;
+            try_map_resize(page_size, open_in_tmpdir())?;
+            try_map(page_size, -1)
         }
 
         let page_size = unsafe { sysconf(_SC_PAGESIZE) as size_t };
         do_open(page_size).break_value()
     }
 
-    unsafe fn mmap_rx_rw(&mut self, len: usize, flags: c_int) -> Option<(*const u8, *mut u8)> {
-        let offset = self.offset;
-        let new_len = self.offset.checked_add(len)?;
+    /// Allocates a read-execute and a read-write mapping pointing to the same memory.
+    ///
+    /// The mappings may overlap and `pthread_jit_write_protect_np` must be called before
+    /// writing to the mapping on macOS.
+    ///
+    /// # Safety
+    ///
+    /// `size` must be a multiple of the value returned by [`map_granularity`].
+    unsafe fn mmap_rx_rw(&mut self, size: usize, flags: c_int) -> Option<(*const u8, *mut u8)> {
+        /// Allocates a single RWX mapping (fallback or macOS specific).
+        unsafe fn mmap_rwx(
+            len: size_t,
+            mut flags: c_int,
+            fd: c_int,
+            offset: off_t,
+        ) -> Option<(*const u8, *mut u8)> {
+            flags |= MAP_PRIVATE;
 
-        if unsafe { ftruncate(self.fd, new_len.try_into().ok()?) != 0 } {
+            if fd == -1 {
+                flags |= MAP_ANONYMOUS;
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                flags |= libc::MAP_JIT;
+            }
+
+            let rwx = unsafe { mmap(ptr::null_mut(), len, PROT_RWX, flags, fd, offset) };
+
+            if rwx == MAP_FAILED {
+                return None;
+            }
+
+            Some((rwx as *const u8, rwx as *mut u8))
+        }
+
+        let len = size.try_into().ok()?;
+
+        // Didn't acquire a fd for double mapping, fall back to a single anonymous one.
+        if self.fd == -1 {
+            return mmap_rwx(len, flags, self.fd, 0);
+        }
+
+        let offset = self.size;
+        let new_size = self.size.checked_add(size)?;
+
+        // Grow the file by `size` to map the newly allocated memory.
+        if unsafe { ftruncate(self.fd, new_size.try_into().ok()?) != 0 } {
             return None;
         };
 
-        let len = len.try_into().ok()?;
         let offset = offset.try_into().ok()?;
 
-        self.offset = new_len;
+        self.size = new_size;
 
         cfg_select! {
-            target_os = "macos" => {
-                let flags = flags | libc::MAP_PRIVATE | libc::MAP_JIT;
-
-                let rwx = unsafe { mmap(ptr::null_mut(), len, PROT_RWX, flags, self.fd, offset) };
-
-                if rwx == MAP_FAILED {
-                    return None;
-                }
-
-                Some((rwx as *const u8, rwx as *mut u8))
-            }
+            // On macOS return a single mapping with the MAP_JIT flag.
+            target_os = "macos" => mmap_rwx(len, flags, self.fd, offset),
+            // On other platforms return a double mapping.
             _ => {
-                let flags = flags | libc::MAP_SHARED;
+                let flags = flags | MAP_SHARED;
 
                 let rx = unsafe { mmap(ptr::null_mut(), len, PROT_RX, flags, self.fd, offset) };
 
@@ -158,9 +225,15 @@ impl BackingFd {
 fn open_linux() -> c_int {
     cfg_select! {
         target_os = "linux" => unsafe {
-            libc::memfd_create(c"closure-ffi".as_ptr(), libc::MFD_CLOEXEC)
-        }
-        _ => -1
+            // N.B. the name used with `memfd_create` does not have to be unique.
+            // Use a syscall in case `memfd_create` is not implemented.
+            libc::syscall(
+                libc::SYS_memfd_create,
+                c"closure-ffi".as_ptr(),
+                libc::MFD_CLOEXEC,
+            ) as c_int
+        },
+        _ => -1,
     }
 }
 
@@ -168,8 +241,8 @@ fn open_freebsd() -> c_int {
     cfg_select! {
         target_os = "freebsd" => unsafe {
             libc::shm_open(libc::SHM_ANON, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
-        }
-        _ => -1
+        },
+        _ => -1,
     }
 }
 
@@ -179,9 +252,13 @@ fn open_named_shm() -> c_int {
             let id = random_id();
             let name = alloc::format!("/closure-ffi-{id:016x}\0");
 
-            libc::shm_open(name.as_ptr() as *const c_char, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
-        }
-        _ => -1
+            libc::shm_open(
+                name.as_ptr() as *const c_char,
+                O_RDWR | O_CREAT | O_EXCL,
+                S_IRUSR | S_IWUSR,
+            )
+        },
+        _ => -1,
     }
 }
 
@@ -195,9 +272,11 @@ fn open_tmpfile() -> c_int {
 
         let mut fd = fileno(file);
         if fd != -1 {
+            // This fd still belongs to the stream, dup it.
             fd = dup(fd);
         }
 
+        // Close the stream (and the original fd).
         fclose(file);
 
         fd
@@ -206,26 +285,35 @@ fn open_tmpfile() -> c_int {
 
 fn open_in_tmpdir() -> c_int {
     unsafe {
+        // Get TMPDIR or default to /tmp
         let tmp = getenv(c"TMPDIR".as_ptr());
 
         let mut tmp_dir = if !tmp.is_null() {
             CStr::from_ptr(tmp).to_owned().into_bytes()
-        } else {
+        }
+        else {
             b"/tmp".to_vec()
         };
 
         let id = random_id();
         tmp_dir.extend_from_slice(format!("/closure-ffi-{id:016x}\0").as_bytes());
 
+        // Using `O_TMPFILE` on Linux makes the executable mapping fail for me (Dasaav).
         let flags = cfg_select! {
             target_os = "linux" => O_RDWR | O_CREAT | O_EXCL | libc::O_CLOEXEC,
             _ => O_RDWR | O_CREAT | O_EXCL,
         };
 
-        open(tmp_dir.as_ptr() as *const c_char, flags, S_IRUSR | S_IWUSR)
+        open(
+            tmp_dir.as_ptr() as *const c_char,
+            flags,
+            (S_IRUSR | S_IWUSR) as c_uint,
+        )
     }
 }
 
+/// Builds a pseudo-random 64-bit ID by hashing a volatile state, stack address,
+/// timestamps and current PID.
 fn random_id() -> u64 {
     static STATE: AtomicU32 = AtomicU32::new(0xdeadbeef);
 
@@ -249,8 +337,6 @@ fn random_id() -> u64 {
             ts_monotonic.tv_nsec.hash(&mut hasher);
             ts_monotonic.tv_sec.hash(&mut hasher);
         }
-
-        gettid().hash(&mut hasher);
 
         getpid().hash(&mut hasher);
     }
