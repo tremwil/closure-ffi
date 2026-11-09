@@ -13,9 +13,9 @@ use core::{
 
 use libc::{
     clock_gettime, close, dup, fclose, fileno, ftruncate, getenv, getpid, mmap, munmap, off_t,
-    open, size_t, sysconf, tmpfile, _SC_PAGESIZE, CLOCK_MONOTONIC, CLOCK_REALTIME, MAP_ANONYMOUS,
-    MAP_FAILED, MAP_PRIVATE, MAP_SHARED, O_CREAT, O_EXCL, O_RDWR, PROT_EXEC, PROT_READ, PROT_WRITE,
-    S_IRUSR, S_IWUSR,
+    open, size_t, sysconf, tmpfile, unlink, _SC_PAGESIZE, CLOCK_MONOTONIC, CLOCK_REALTIME,
+    MAP_ANONYMOUS, MAP_FAILED, MAP_PRIVATE, MAP_SHARED, O_CREAT, O_EXCL, O_RDWR, PROT_EXEC,
+    PROT_READ, PROT_WRITE, S_IRUSR, S_IWUSR,
 };
 
 #[allow(unused)]
@@ -250,13 +250,21 @@ fn open_named_shm() -> c_int {
     cfg_select! {
         not(any(target_vendor = "apple", target_os = "android")) => unsafe {
             let id = random_id();
-            let name = alloc::format!("/closure-ffi-{id:016x}\0");
 
-            libc::shm_open(
+            let name = alloc::format!("/closure-ffi-{id:016x}\0");
+            let name_ptr = name.as_ptr() as *const c_char;
+
+            let fd = libc::shm_open(
                 name.as_ptr() as *const c_char,
                 O_RDWR | O_CREAT | O_EXCL,
                 S_IRUSR | S_IWUSR,
-            )
+            );
+
+            if fd != -1 {
+                libc::shm_unlink(name_ptr);
+            }
+
+            fd
         },
         _ => -1,
     }
@@ -288,7 +296,7 @@ fn open_in_tmpdir() -> c_int {
         // Get TMPDIR or default to /tmp
         let tmp = getenv(c"TMPDIR".as_ptr());
 
-        let mut tmp_dir = if !tmp.is_null() {
+        let mut tmp = if !tmp.is_null() {
             CStr::from_ptr(tmp).to_owned().into_bytes()
         }
         else {
@@ -296,7 +304,9 @@ fn open_in_tmpdir() -> c_int {
         };
 
         let id = random_id();
-        tmp_dir.extend_from_slice(format!("/closure-ffi-{id:016x}\0").as_bytes());
+
+        tmp.extend_from_slice(format!("/closure-ffi-{id:016x}\0").as_bytes());
+        let name_ptr = tmp.as_ptr() as *const c_char;
 
         // Using `O_TMPFILE` on Linux makes the executable mapping fail for me (Dasaav).
         let flags = cfg_select! {
@@ -304,11 +314,13 @@ fn open_in_tmpdir() -> c_int {
             _ => O_RDWR | O_CREAT | O_EXCL,
         };
 
-        open(
-            tmp_dir.as_ptr() as *const c_char,
-            flags,
-            (S_IRUSR | S_IWUSR) as c_uint,
-        )
+        let fd = open(name_ptr, flags, (S_IRUSR | S_IWUSR) as c_uint);
+
+        if fd != -1 {
+            unlink(name_ptr);
+        }
+
+        fd
     }
 }
 
