@@ -18,7 +18,7 @@ impl super::GlobalJitAlloc {
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "global_jit_alloc")))]
-impl JitAlloc for super::GlobalJitAlloc {
+unsafe impl JitAlloc for super::GlobalJitAlloc {
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
         self.use_alloc(|a| a.alloc(size))
     }
@@ -44,14 +44,14 @@ impl JitAlloc for super::GlobalJitAlloc {
 
 #[cfg(feature = "std")]
 pub(super) mod thread_jit_alloc {
-    use core::{cell::UnsafeCell, marker::PhantomData};
+    use core::{cell::RefCell, marker::PhantomData};
     use std::thread_local;
 
     #[allow(unused_imports)]
     use super::*;
 
     thread_local! {
-        static THREAD_JIT_ALLOC: UnsafeCell<JitTlsf> = const { UnsafeCell::new(JitTlsf::new()) };
+        static THREAD_JIT_ALLOC: RefCell<JitTlsf> = const { RefCell::new(JitTlsf::new()) };
     }
 
     /// Marker type providing access to a thread-local JIT allocator.
@@ -60,13 +60,13 @@ pub(super) mod thread_jit_alloc {
     #[derive(Default, Clone)]
     pub struct ThreadJitAlloc(PhantomData<*mut ()>);
 
-    impl JitAlloc for ThreadJitAlloc {
+    unsafe impl JitAlloc for ThreadJitAlloc {
         fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-            THREAD_JIT_ALLOC.with(|a| unsafe { (*a.get()).alloc(size) })
+            THREAD_JIT_ALLOC.with_borrow_mut(|a| a.alloc(size))
         }
 
         unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-            THREAD_JIT_ALLOC.with(|a| unsafe { (*a.get()).release(rx_ptr) })
+            THREAD_JIT_ALLOC.with_borrow_mut(|a| a.release(rx_ptr))
         }
 
         #[inline(always)]

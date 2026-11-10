@@ -32,7 +32,7 @@ impl SlabAlloc {
     }
 }
 
-impl JitAlloc for SlabAlloc {
+unsafe impl JitAlloc for SlabAlloc {
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
         use std::sync::atomic::Ordering::*;
 

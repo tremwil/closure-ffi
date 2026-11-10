@@ -32,10 +32,20 @@ pub enum ProtectJitAccess {
 ///
 /// The API is meant to be a thin abstraction over the `jit-allocator` crate's API, to allow it
 /// to be swapped with other allocators.
-pub trait JitAlloc {
+///
+/// # Safety
+///
+/// The allocator must be sensible and not invalidate memory it gives out prematurely, and must
+/// implement all methods correctly.
+///
+/// See the [`core::alloc::Allocator`] trait for rules of allocation invalidation and specific
+/// safety guidelines.
+pub unsafe trait JitAlloc {
     /// Allocates `size` bytes in the executable memory region.
     /// Returns two pointers. One points to Read-Execute mapping and another to Read-Write mapping.
     /// All code writes *must* go to the Read-Write mapping.
+    ///
+    /// The mappings *may overlap* and you should not rely on them being distinct in unsafe code.
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError>;
 
     /// Releases the memory allocated by `alloc`.
@@ -68,7 +78,7 @@ pub trait JitAlloc {
     unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize);
 }
 
-impl<J: JitAlloc, D: Deref<Target = J>> JitAlloc for D {
+unsafe impl<J: JitAlloc, D: Deref<Target = J>> JitAlloc for D {
     fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
         (**self).alloc(size)
     }
@@ -161,7 +171,7 @@ mod custom_jit_alloc {
         unsafe { _closure_ffi_3_global_jit_alloc() }
     }
 
-    impl JitAlloc for GlobalJitAlloc {
+    unsafe impl JitAlloc for GlobalJitAlloc {
         fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
             get_global_jit_alloc().alloc(size)
         }
