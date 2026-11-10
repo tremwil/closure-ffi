@@ -27,7 +27,13 @@ crate-type = ["lib"]
 test = true
 
 [features]
-default = ["std", "default_jit_alloc", "safe_jit"]
+default = [
+    "std",
+    "default_jit_alloc",
+    "shm_open_jit_alloc",
+    "tmp_file_jit_alloc",
+    "safe_jit",
+]
 std = []
 global_jit_alloc = []
 # spin is needed on no_std, but not std.
@@ -38,6 +44,8 @@ default_jit_alloc = [
     "dep:spin",
     "dep:rlsf",
 ]
+shm_open_jit_alloc = []
+tmp_file_jit_alloc = []
 safe_jit = ["iced-x86/std", "dep:capstone"]
 no_safe_jit = []
 unstable = []

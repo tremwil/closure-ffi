@@ -123,18 +123,33 @@ impl BackingFd {
         ///
         /// 1. `memfd_create` (Linux only)
         /// 2. `shm_open` with `SHM_ANON` (FreeBSD only)
-        /// 3. `shm_open` with a randomly assigned name
-        /// 4. `tmpfile` into `fileno`
-        /// 5. `open` in /tmp with a randomly assigned name
+        /// 3. anonymous RWX mapping
         ///
-        /// If all else fails anonymous RWX mappings will be used.
+        /// Target feature "shm_open_jit_alloc" only:
+        /// 4. `shm_open` with a randomly assigned name
+        ///
+        /// Target feature "tmp_file_jit_alloc" only:
+        /// 5. `tmpfile` into `fileno`
+        /// 6. `open` with `O_TMPFILE` in /tmp (Linux only)
+        /// 7. `open` with `O_TMPFILE` in the CWD (Linux only)
+        /// 8. `open` in /tmp with a randomly assigned name
         fn do_open(page_size: usize) -> ControlFlow<BackingFd> {
             try_map_resize(page_size, open_linux())?;
             try_map_resize(page_size, open_freebsd())?;
+            try_map(page_size, -1)?;
+
+            #[cfg(feature = "shm_open_jit_alloc")]
             try_map_resize(page_size, open_named_shm())?;
-            try_map_resize(page_size, open_tmpfile())?;
-            try_map_resize(page_size, open_in_tmpdir())?;
-            try_map(page_size, -1)
+
+            #[cfg(feature = "tmp_file_jit_alloc")]
+            {
+                try_map_resize(page_size, open_tmpfile())?;
+                try_map_resize(page_size, open_tmp_in_cwd())?;
+                try_map_resize(page_size, open_tmp_in_tmpdir())?;
+                try_map_resize(page_size, open_named_in_tmpdir())?;
+            }
+
+            ControlFlow::Continue(())
         }
 
         let page_size = unsafe { sysconf(_SC_PAGESIZE) as size_t };
@@ -291,24 +306,35 @@ fn open_tmpfile() -> c_int {
     }
 }
 
-fn open_in_tmpdir() -> c_int {
+fn open_tmp_in_cwd() -> c_int {
+    open_tmp_in(c"./")
+}
+
+fn open_tmp_in_tmpdir() -> c_int {
+    open_tmp_in(tmpdir())
+}
+
+fn open_tmp_in(_dir: &CStr) -> c_int {
+    cfg_select! {
+        target_os = "linux" => unsafe {
+            open(
+                _dir.as_ptr(),
+                O_RDWR | O_EXCL | libc::O_TMPFILE | libc::O_CLOEXEC,
+                (S_IRUSR | S_IWUSR) as c_uint,
+            )
+        },
+        _ => -1,
+    }
+}
+
+fn open_named_in_tmpdir() -> c_int {
     unsafe {
-        // Get TMPDIR or default to /tmp
-        let tmp = getenv(c"TMPDIR".as_ptr());
-
-        let mut tmp = if !tmp.is_null() {
-            CStr::from_ptr(tmp).to_owned().into_bytes()
-        }
-        else {
-            b"/tmp".to_vec()
-        };
-
         let id = random_id();
+        let mut tmp = tmpdir().to_owned().into_bytes();
 
         tmp.extend_from_slice(format!("/closure-ffi-{id:016x}\0").as_bytes());
         let name_ptr = tmp.as_ptr() as *const c_char;
 
-        // Using `O_TMPFILE` on Linux makes the executable mapping fail for me (Dasaav).
         let flags = cfg_select! {
             target_os = "linux" => O_RDWR | O_CREAT | O_EXCL | libc::O_CLOEXEC,
             _ => O_RDWR | O_CREAT | O_EXCL,
@@ -321,6 +347,17 @@ fn open_in_tmpdir() -> c_int {
         }
 
         fd
+    }
+}
+
+fn tmpdir() -> &'static CStr {
+    // Get TMPDIR or default to /tmp
+    let env = unsafe { getenv(c"TMPDIR".as_ptr()) };
+    if !env.is_null() {
+        unsafe { CStr::from_ptr(env) }
+    }
+    else {
+        c"/tmp"
     }
 }
 
