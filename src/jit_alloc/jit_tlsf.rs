@@ -5,6 +5,7 @@ use core::{
     alloc::Layout,
     ops::Bound::{Excluded, Unbounded},
     ptr::NonNull,
+    slice,
     sync::atomic::{AtomicUsize, Ordering::Relaxed},
 };
 
@@ -36,6 +37,9 @@ struct Source {
 struct JitWriteProtect;
 
 impl JitTlsf {
+    /// The minimum allocation alignment returned by this allocator.
+    pub const MIN_ALIGN: usize = 16;
+
     pub const fn new() -> Self {
         Self {
             inner: FlexTlsf::new(Source::new()),
@@ -43,11 +47,21 @@ impl JitTlsf {
     }
 
     pub fn alloc(&mut self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-        let layout = Layout::from_size_align(size, 1).map_err(|_| JitAllocError)?;
+        // Always allocate enough memory to append at least one trap instruction.
+        // `Self::release` relies on this fact to write at least one trap instruction at the start.
+        let size = size.checked_add(size_of::<TrapCode>()).ok_or(JitAllocError)?;
+        let layout = Layout::from_size_align(size, Self::MIN_ALIGN).map_err(|_| JitAllocError)?;
 
-        let rw = {
+        // Allocate, write protect and fill memory with trap instructions.
+        let rw = unsafe {
             let _write_protect = JitWriteProtect::new();
-            self.inner.allocate(layout).ok_or(JitAllocError)?.as_ptr()
+
+            let rw = self.inner.allocate(layout).ok_or(JitAllocError)?.as_ptr();
+
+            let bytes = slice::from_raw_parts_mut(rw, size);
+            bytes.align_to_mut::<TrapCode>().1.fill(TRAP);
+
+            rw
         };
 
         // Matching an in-block pointer against past-the-end we don't want to include
@@ -63,6 +77,11 @@ impl JitTlsf {
         // Calculate offset in rx from the end.
         let offset = unsafe { rw_end.offset_from_unsigned(rw) };
         let rx = unsafe { rx_end.sub(offset) };
+
+        // Overwrote entire range with trap instructions, so flush.
+        unsafe {
+            clear_cache::clear_cache(rx, rx.add(size));
+        }
 
         Ok((rx, rw))
     }
@@ -84,8 +103,16 @@ impl JitTlsf {
 
         let rw = NonNull::new(rw).ok_or(JitAllocError)?;
 
-        let _write_protect = JitWriteProtect::new();
-        self.inner.deallocate(rw, 1);
+        // Write protect and free memory, write a trap instruction.
+        unsafe {
+            let _write_protect = JitWriteProtect::new();
+
+            // Relies on the fact `Self::alloc` allocates at least one trap instruction's length.
+            rw.cast::<TrapCode>().write_volatile(TRAP);
+            clear_cache::clear_cache(rx, rx.add(size_of::<TrapCode>()));
+
+            self.inner.deallocate(rw, Self::MIN_ALIGN);
+        }
 
         Ok(())
     }
@@ -166,5 +193,47 @@ impl Drop for JitWriteProtect {
         unsafe {
             libc::pthread_jit_write_protect_np(1);
         }
+    }
+}
+
+cfg_select! {
+    any(target_arch = "x86", target_arch = "x86_64") => {
+        /// Trap instruction: int3
+        const TRAP: TrapCode = 0xcc;
+        type TrapCode = u8;
+    }
+    target_arch = "aarch64" => {
+        /// Trap instruction: brk #0xF000
+        const TRAP: TrapCode = TrapCode::from_be_bytes([0xd4, 0x3e, 0x00, 0x00]);
+        type TrapCode = u32;
+    }
+    all(target_arch = "arm", thumb_mode) => {
+        /// Trap instruction: bkpt #0
+        const TRAP: TrapCode = TrapCode::from_be_bytes([0xbe, 0x00]);
+        type TrapCode = u16;
+    }
+    target_arch = "arm" => {
+        /// Trap instruction: bkpt #0
+        const TRAP: TrapCode = TrapCode::from_be_bytes([0xe1, 0x20, 0x00, 0x70]);
+        type TrapCode = u32;
+    }
+    _ => {
+        /// Trap instruction zerofill fallback
+        const TRAP: TrapCode = 0;
+        type TrapCode = u32;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::jit_alloc::jit_tlsf::{JitTlsf, TrapCode, TRAP};
+
+    static ALLOC: spin::Mutex<JitTlsf> = spin::Mutex::new(JitTlsf::new());
+
+    #[test]
+    fn new_allocations_trap() {
+        let (rx, _) = ALLOC.lock().alloc(1).unwrap();
+        let trap = unsafe { rx.cast::<TrapCode>().read() };
+        assert_eq!(trap, TRAP);
     }
 }
