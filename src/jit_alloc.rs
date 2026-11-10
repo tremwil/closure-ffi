@@ -163,6 +163,8 @@ pub use global_jit_alloc;
 
 #[cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")))]
 mod custom_jit_alloc {
+    use core::alloc::Layout;
+
     use super::{GlobalJitAlloc, JitAlloc, JitAllocError, ProtectJitAccess};
 
     extern "Rust" {
