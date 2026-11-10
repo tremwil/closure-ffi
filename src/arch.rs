@@ -3,6 +3,8 @@
 //!
 //! While parts of this module are public for macro reasons, they should not be used directly.
 
+use core::alloc::Layout;
+
 use crate::jit_alloc::{JitAlloc, JitAllocError, ProtectJitAccess};
 #[cfg(feature = "safe_jit")]
 use crate::safe_jit::RelocThunk;
@@ -164,15 +166,28 @@ macro_rules! _thunk_asm {
 
 #[derive(Debug)]
 pub(crate) struct AllocatedThunk<J: JitAlloc> {
-    alloc_base: *const u8,
     thunk: *const (),
+    thunk_len: usize,
     jit: J,
 }
 
 impl<J: JitAlloc> Drop for AllocatedThunk<J> {
     fn drop(&mut self) {
-        if !self.alloc_base.is_null() {
-            let _ = unsafe { self.jit.release(self.alloc_base) };
+        if self.thunk_len == 0 {
+            // No memory to release.
+            return;
+        }
+
+        unsafe {
+            let layout =
+                Layout::from_size_align_unchecked(self.thunk_len, align_of::<consts::Magic>());
+
+            // When in thumb mode, the thunk pointer will have the lower bit set to 1.
+            let thunk_rx = self.thunk;
+            #[cfg(thumb_mode)]
+            let thunk_rx = thunk_rx.map_addr(|a| a & !1);
+
+            let _ = self.jit.release(thunk_rx.cast(), layout);
         }
     }
 }
@@ -209,8 +224,8 @@ impl<J: JitAlloc> AllocatedThunk<J> {
     ) -> Result<Self, JitAllocError> {
         if closure_size == 0 {
             return Ok(AllocatedThunk {
-                alloc_base: core::ptr::null(),
                 thunk: thunk_template_ptr.cast(),
+                thunk_len: 0,
                 jit,
             });
         }
@@ -247,10 +262,9 @@ impl<J: JitAlloc> AllocatedThunk<J> {
             template_magic_offset,
         );
 
-        // Skip initial bytes for proper alignment
-        let (rx, rw) = jit.alloc(thunk.len() + MAGIC_ALIGN - 1)?;
-        let align_offset = rw.add(magic_offset).align_offset(MAGIC_ALIGN);
-        let (thunk_rx, rw) = (rx.add(align_offset), rw.add(align_offset));
+        let layout =
+            Layout::from_size_align(thunk.len(), MAGIC_ALIGN).map_err(|_| JitAllocError)?;
+        let (thunk_rx, rw) = jit.alloc(layout)?;
 
         jit.protect_jit_memory(thunk_rx, thunk.len(), ProtectJitAccess::ReadWrite);
 
@@ -280,8 +294,8 @@ impl<J: JitAlloc> AllocatedThunk<J> {
         let thunk_rx = thunk_rx.map_addr(|a| a | 1);
 
         Ok(AllocatedThunk {
-            alloc_base: rx,
             thunk: thunk_rx.cast(),
+            thunk_len: thunk.len(),
             jit,
         })
     }

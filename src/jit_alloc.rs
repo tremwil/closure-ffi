@@ -6,6 +6,7 @@
 //!
 //! See the [`JitAlloc`] trait for more information.
 
+use core::alloc::Layout;
 #[allow(unused_imports)]
 use core::ops::Deref;
 
@@ -41,12 +42,12 @@ pub enum ProtectJitAccess {
 /// See the [`core::alloc::Allocator`] trait for rules of allocation invalidation and specific
 /// safety guidelines.
 pub unsafe trait JitAlloc {
-    /// Allocates `size` bytes in the executable memory region.
+    /// Allocates bytes in the executable memory region according to the [`Layout`].
     /// Returns two pointers. One points to Read-Execute mapping and another to Read-Write mapping.
     /// All code writes *must* go to the Read-Write mapping.
     ///
     /// The mappings *may overlap* and you should not rely on them being distinct in unsafe code.
-    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError>;
+    fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError>;
 
     /// Releases the memory allocated by `alloc`.
     ///
@@ -54,8 +55,9 @@ pub unsafe trait JitAlloc {
     /// - `rx_ptr` must have been returned from `alloc`
     /// - `rx_ptr` must have been allocated from this allocator
     /// - `rx_ptr` must not have been passed to `release` before
-    /// - `rx_ptr` must point to read-execute part of memory returned from `alloc`.
-    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError>;
+    /// - `rx_ptr` must point to read-execute part of memory returned from `alloc`
+    /// - `layout` must be the same as was passed to `alloc`
+    unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError>;
 
     /// On hardened architectures with `MAP_JIT`-like memory flags, set the access for the current
     /// thread.
@@ -79,12 +81,12 @@ pub unsafe trait JitAlloc {
 }
 
 unsafe impl<J: JitAlloc, D: Deref<Target = J>> JitAlloc for D {
-    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-        (**self).alloc(size)
+    fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError> {
+        (**self).alloc(layout)
     }
 
-    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-        (**self).release(rx_ptr)
+    unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError> {
+        (**self).release(rx_ptr, layout)
     }
 
     #[inline(always)]
@@ -172,12 +174,12 @@ mod custom_jit_alloc {
     }
 
     unsafe impl JitAlloc for GlobalJitAlloc {
-        fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-            get_global_jit_alloc().alloc(size)
+        fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError> {
+            get_global_jit_alloc().alloc(layout)
         }
 
-        unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-            get_global_jit_alloc().release(rx_ptr)
+        unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError> {
+            get_global_jit_alloc().release(rx_ptr, layout)
         }
 
         unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {

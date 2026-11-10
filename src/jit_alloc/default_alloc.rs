@@ -1,5 +1,7 @@
 #![cfg(feature = "default_jit_alloc")]
 
+use core::alloc::Layout;
+
 use crate::jit_alloc::{jit_tlsf::JitTlsf, JitAlloc, JitAllocError, ProtectJitAccess};
 
 #[cfg(not(feature = "std"))]
@@ -19,12 +21,12 @@ impl super::GlobalJitAlloc {
 
 #[cfg_attr(docsrs, doc(cfg(feature = "global_jit_alloc")))]
 unsafe impl JitAlloc for super::GlobalJitAlloc {
-    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-        self.use_alloc(|a| a.alloc(size))
+    fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError> {
+        self.use_alloc(|a| a.alloc(layout))
     }
 
-    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-        self.use_alloc(|a| unsafe { a.release(rx_ptr) })
+    unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError> {
+        self.use_alloc(|a| unsafe { a.release(rx_ptr, layout) })
     }
 
     #[inline(always)]
@@ -61,12 +63,12 @@ pub(super) mod thread_jit_alloc {
     pub struct ThreadJitAlloc(PhantomData<*mut ()>);
 
     unsafe impl JitAlloc for ThreadJitAlloc {
-        fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-            THREAD_JIT_ALLOC.with_borrow_mut(|a| a.alloc(size))
+        fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError> {
+            THREAD_JIT_ALLOC.with_borrow_mut(|a| a.alloc(layout))
         }
 
-        unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-            THREAD_JIT_ALLOC.with_borrow_mut(|a| a.release(rx_ptr))
+        unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError> {
+            THREAD_JIT_ALLOC.with_borrow_mut(|a| a.release(rx_ptr, layout))
         }
 
         #[inline(always)]

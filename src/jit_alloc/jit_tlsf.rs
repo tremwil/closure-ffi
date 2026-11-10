@@ -37,20 +37,14 @@ struct Source {
 struct JitWriteProtect;
 
 impl JitTlsf {
-    /// The minimum allocation alignment returned by this allocator.
-    pub const MIN_ALIGN: usize = 16;
-
     pub const fn new() -> Self {
         Self {
             inner: FlexTlsf::new(Source::new()),
         }
     }
 
-    pub fn alloc(&mut self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-        // Always allocate enough memory to append at least one trap instruction.
-        // `Self::release` relies on this fact to write at least one trap instruction at the start.
-        let size = size.checked_add(size_of::<TrapCode>()).ok_or(JitAllocError)?;
-        let layout = Layout::from_size_align(size, Self::MIN_ALIGN).map_err(|_| JitAllocError)?;
+    pub fn alloc(&mut self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError> {
+        let layout = Self::pad_layout(layout)?;
 
         // Allocate, write protect and fill memory with trap instructions.
         let rw = unsafe {
@@ -58,7 +52,7 @@ impl JitTlsf {
 
             let rw = self.inner.allocate(layout).ok_or(JitAllocError)?.as_ptr();
 
-            let bytes = slice::from_raw_parts_mut(rw, size);
+            let bytes = slice::from_raw_parts_mut(rw, layout.size());
             bytes.align_to_mut::<TrapCode>().1.fill(TRAP);
 
             rw
@@ -80,13 +74,15 @@ impl JitTlsf {
 
         // Overwrote entire range with trap instructions, so flush.
         unsafe {
-            clear_cache::clear_cache(rx, rx.add(size));
+            clear_cache::clear_cache(rx, rx.add(layout.size()));
         }
 
         Ok((rx, rw))
     }
 
-    pub unsafe fn release(&mut self, rx: *const u8) -> Result<(), JitAllocError> {
+    pub unsafe fn release(&mut self, rx: *const u8, layout: Layout) -> Result<(), JitAllocError> {
+        let layout = Self::pad_layout(layout)?;
+
         // Matching an in-block pointer against past-the-end we don't want to include
         // the end of a previous block by accident.
         let (rx_end, rw_end) = self
@@ -103,18 +99,29 @@ impl JitTlsf {
 
         let rw = NonNull::new(rw).ok_or(JitAllocError)?;
 
-        // Write protect and free memory, write a trap instruction.
+        // Write protect and free memory, fill with trap instructions.
         unsafe {
             let _write_protect = JitWriteProtect::new();
 
-            // Relies on the fact `Self::alloc` allocates at least one trap instruction's length.
-            rw.cast::<TrapCode>().write_volatile(TRAP);
+            let bytes = slice::from_raw_parts_mut(rw.as_ptr(), layout.size());
+            bytes.align_to_mut::<TrapCode>().1.fill(TRAP);
+
             clear_cache::clear_cache(rx, rx.add(size_of::<TrapCode>()));
 
-            self.inner.deallocate(rw, Self::MIN_ALIGN);
+            self.inner.deallocate(rw, layout.align());
         }
 
         Ok(())
+    }
+
+    /// Always allocates enough memory to append at least one trap instruction.
+    ///
+    /// [`Self::release`] relies on this fact to write at least one trap instruction at the start.
+    fn pad_layout(layout: Layout) -> Result<Layout, JitAllocError> {
+        layout
+            .extend(Layout::new::<TrapCode>())
+            .map(|(layout, _)| layout.pad_to_align())
+            .map_err(|_| JitAllocError)
     }
 }
 
@@ -226,13 +233,17 @@ cfg_select! {
 
 #[cfg(test)]
 mod tests {
+    use core::alloc::Layout;
+
     use crate::jit_alloc::jit_tlsf::{JitTlsf, TrapCode, TRAP};
 
     static ALLOC: spin::Mutex<JitTlsf> = spin::Mutex::new(JitTlsf::new());
 
     #[test]
     fn new_allocations_trap() {
-        let (rx, _) = ALLOC.lock().alloc(1).unwrap();
+        let layout = Layout::from_size_align(1, 1).unwrap();
+        let (rx, _) = ALLOC.lock().alloc(layout).unwrap();
+
         let trap = unsafe { rx.cast::<TrapCode>().read() };
         assert_eq!(trap, TRAP);
     }
