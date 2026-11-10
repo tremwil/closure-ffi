@@ -239,10 +239,7 @@ impl BackingFd {
 
 fn open_linux() -> c_int {
     cfg_select! {
-        any(
-            target_os = "linux",
-            all(target_os = "android", feature = "api-level-30")
-        ) => unsafe {
+        any(target_os = "linux", target_os = "android") => unsafe {
             // N.B. the name used with `memfd_create` does not have to be unique.
             // Use a syscall in case `memfd_create` is not implemented.
             libc::syscall(
