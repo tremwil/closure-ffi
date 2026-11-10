@@ -56,6 +56,15 @@ pub struct SECURITY_ATTRIBUTES {
 
 pub type LPSECURITY_ATTRIBUTES = *mut SECURITY_ATTRIBUTES;
 
+#[cfg_attr(target_arch = "x86_64", link(name = "Kernel32", kind = "raw-dylib"))]
+#[cfg_attr(
+    target_arch = "x86",
+    link(
+        name = "Kernel32",
+        kind = "raw-dylib",
+        import_name_type = "undecorated"
+    )
+)]
 unsafe extern "system" {
     pub unsafe fn GetLastError() -> DWORD;
 
