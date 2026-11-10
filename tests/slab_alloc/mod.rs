@@ -58,14 +58,11 @@ unsafe impl JitAlloc for SlabAlloc {
         clear_cache::clear_cache(rx_ptr, rx_ptr.add(size));
     }
 
-    unsafe fn protect_jit_memory(
-        &self,
-        _ptr: *const u8,
-        _size: usize,
-        _access: closure_ffi::jit_alloc::ProtectJitAccess,
-    ) {
-        // TODO (MacOS): implement this!
-        // Hardened runtime isn't used in macos-latest GitHub actions runners, so leaving this blank
-        // is fine for CI testing
+    unsafe fn protect_jit_memory(&self, _ptr: *const u8, _size: usize, _access: ProtectJitAccess) {
+        #[cfg(target_os = "macos")]
+        unsafe {
+            let enabled = matches!(_access, ProtectJitAccess::ReadExecute);
+            libc::pthread_jit_write_protect_np(enabled as _);
+        }
     }
 }
