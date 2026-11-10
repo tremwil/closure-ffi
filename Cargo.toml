@@ -41,6 +41,7 @@ global_jit_alloc = []
 default_jit_alloc = [
     "global_jit_alloc",
     "dep:clear-cache",
+    "dep:libc",
     "dep:spin",
     "dep:rlsf",
 ]
@@ -69,6 +70,9 @@ default-features = false
 features = ["no_std", "instr_info", "decoder", "encoder"]
 optional = true
 
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2", default-features = false, optional = true }
+
 [target.'cfg(target_arch = "aarch64")'.dependencies.capstone]
 version = "0.14.0"
 default-features = false
@@ -81,16 +85,14 @@ default-features = false
 features = ["full", "arch_arm"]
 optional = true
 
-[target.'cfg(unix)'.dependencies]
-libc = { version = "0.2", default-features = false }
-
 [build-dependencies]
 rustflags = "0.1.7"
 
 [dev-dependencies]
-spin = "0.12.3"
-region = "4.0.1"
 clear-cache = "0.1.3"
+libc = { version = "0.2", default-features = false }
+region = "4.0.1"
+spin = "0.12.3"
 
 [package.metadata.docs.rs]
 features = ["proc_macros"]
