@@ -121,7 +121,7 @@ impl BackingFd {
         ///
         /// The first one to succeed is used:
         ///
-        /// 1. `memfd_create` (Linux only)
+        /// 1. `memfd_create` (Linux and Android only)
         /// 2. `shm_open` with `SHM_ANON` (FreeBSD only)
         /// 3. anonymous RWX mapping
         ///
@@ -130,9 +130,9 @@ impl BackingFd {
         ///
         /// Target feature "tmp_file_jit_alloc" only:
         /// 5. `tmpfile` into `fileno`
-        /// 6. `open` with `O_TMPFILE` in /tmp (Linux only)
-        /// 7. `open` with `O_TMPFILE` in the CWD (Linux only)
-        /// 8. `open` in /tmp with a randomly assigned name
+        /// 6. `open` with `O_TMPFILE` in the CWD (Linux only)
+        /// 7. `open` with `O_TMPFILE` in $TMPDIR or /tmp (Linux only)
+        /// 8. `open` in $TMPDIR or /tmp with a randomly assigned name
         fn do_open(page_size: usize) -> ControlFlow<BackingFd> {
             try_map_resize(page_size, open_linux())?;
             try_map_resize(page_size, open_freebsd())?;
