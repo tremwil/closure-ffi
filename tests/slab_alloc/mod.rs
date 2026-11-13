@@ -1,6 +1,6 @@
-use core::sync::atomic::AtomicUsize;
+use core::{alloc::Layout, sync::atomic::AtomicUsize};
 
-use closure_ffi::{JitAlloc, JitAllocError};
+use closure_ffi::{jit_alloc::ProtectJitAccess, JitAlloc, JitAllocError};
 use region::{Allocation, Protection};
 
 #[cfg(feature = "std")]
@@ -32,22 +32,25 @@ impl SlabAlloc {
     }
 }
 
-impl JitAlloc for SlabAlloc {
-    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
+unsafe impl JitAlloc for SlabAlloc {
+    fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError> {
         use std::sync::atomic::Ordering::*;
 
         let offset = self
             .offset
             .try_update(Relaxed, Relaxed, |offset| {
-                (size + offset <= self.buf.len()).then_some(size + offset)
+                let start = offset.next_multiple_of(layout.align());
+                let end = start + layout.size();
+                (end <= self.buf.len()).then_some(end)
             })
-            .map_err(|_| JitAllocError)?;
+            .map_err(|_| JitAllocError)?
+            .next_multiple_of(layout.align());
 
         let ptr = unsafe { self.buf.as_ptr::<u8>().add(offset) };
         Ok((ptr, ptr as *mut _))
     }
 
-    unsafe fn release(&self, _rx_ptr: *const u8) -> Result<(), JitAllocError> {
+    unsafe fn release(&self, _rx_ptr: *const u8, _layout: Layout) -> Result<(), JitAllocError> {
         Ok(())
     }
 
@@ -55,14 +58,11 @@ impl JitAlloc for SlabAlloc {
         clear_cache::clear_cache(rx_ptr, rx_ptr.add(size));
     }
 
-    unsafe fn protect_jit_memory(
-        &self,
-        _ptr: *const u8,
-        _size: usize,
-        _access: closure_ffi::jit_alloc::ProtectJitAccess,
-    ) {
-        // TODO (MacOS): implement this!
-        // Hardened runtime isn't used in macos-latest GitHub actions runners, so leaving this blank
-        // is fine for CI testing
+    unsafe fn protect_jit_memory(&self, _ptr: *const u8, _size: usize, _access: ProtectJitAccess) {
+        #[cfg(target_os = "macos")]
+        unsafe {
+            let enabled = matches!(_access, ProtectJitAccess::ReadExecute);
+            libc::pthread_jit_write_protect_np(enabled as _);
+        }
     }
 }

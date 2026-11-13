@@ -1,4 +1,5 @@
 //! Defines calling convention marker types for use with `BareFn` variants.
+#![allow(clippy::incompatible_msrv)]
 
 macro_rules! cc_thunk_impl_triple {
     (

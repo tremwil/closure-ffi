@@ -6,8 +6,14 @@
 //!
 //! See the [`JitAlloc`] trait for more information.
 
+use core::alloc::Layout;
 #[allow(unused_imports)]
 use core::ops::Deref;
+
+mod default_alloc;
+mod jit_tlsf;
+mod unix;
+mod windows;
 
 /// Anonymous error that may be returned by [`JitAlloc`] implementations when [`JitAlloc::alloc`] or
 /// [`JitAlloc::release`] fail.
@@ -27,11 +33,21 @@ pub enum ProtectJitAccess {
 ///
 /// The API is meant to be a thin abstraction over the `jit-allocator` crate's API, to allow it
 /// to be swapped with other allocators.
-pub trait JitAlloc {
-    /// Allocates `size` bytes in the executable memory region.
+///
+/// # Safety
+///
+/// The allocator must be sensible and not invalidate memory it gives out prematurely, and must
+/// implement all methods correctly.
+///
+/// See the [`core::alloc::Allocator`] trait for rules of allocation invalidation and specific
+/// safety guidelines.
+pub unsafe trait JitAlloc {
+    /// Allocates bytes in the executable memory region according to the [`Layout`].
     /// Returns two pointers. One points to Read-Execute mapping and another to Read-Write mapping.
     /// All code writes *must* go to the Read-Write mapping.
-    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError>;
+    ///
+    /// The mappings *may overlap* and you should not rely on them being distinct in unsafe code.
+    fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError>;
 
     /// Releases the memory allocated by `alloc`.
     ///
@@ -39,8 +55,9 @@ pub trait JitAlloc {
     /// - `rx_ptr` must have been returned from `alloc`
     /// - `rx_ptr` must have been allocated from this allocator
     /// - `rx_ptr` must not have been passed to `release` before
-    /// - `rx_ptr` must point to read-execute part of memory returned from `alloc`.
-    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError>;
+    /// - `rx_ptr` must point to read-execute part of memory returned from `alloc`
+    /// - `layout` must be the same as was passed to `alloc`
+    unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError>;
 
     /// On hardened architectures with `MAP_JIT`-like memory flags, set the access for the current
     /// thread.
@@ -63,13 +80,13 @@ pub trait JitAlloc {
     unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize);
 }
 
-impl<J: JitAlloc, D: Deref<Target = J>> JitAlloc for D {
-    fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-        (**self).alloc(size)
+unsafe impl<J: JitAlloc, D: Deref<Target = J>> JitAlloc for D {
+    fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError> {
+        (**self).alloc(layout)
     }
 
-    unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-        (**self).release(rx_ptr)
+    unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError> {
+        (**self).release(rx_ptr, layout)
     }
 
     #[inline(always)]
@@ -87,138 +104,17 @@ impl<J: JitAlloc, D: Deref<Target = J>> JitAlloc for D {
 /// The default, global JIT allocator.
 ///
 /// When the `default_jit_alloc` feature is enabled, this is currently implemented as a ZST
-/// deferring to a static [`jit_allocator2::JitAllocator`] behind a [`std::sync::Mutex`] (or a
-/// [`spin::Mutex`] under `no_std`).
+/// deferring to a static jit allocator backed by [`rlsf::Tlsf`] behind a [`std::sync::Mutex`]
+/// (or a [`spin::Mutex`] under `no_std`).
 ///
 /// When the `default_jit_alloc` feature is not enabled, defers to a [`JitAlloc`] implementation
 /// provided by a downstream crate using the [`global_jit_alloc`] macro.
 #[derive(Default, Clone, Copy)]
 pub struct GlobalJitAlloc;
 
-#[cfg(feature = "default_jit_alloc")]
-mod default_jit_alloc {
-    use jit_allocator2::JitAllocator;
-
-    use super::*;
-
-    #[inline(always)]
-    fn convert_access(access: ProtectJitAccess) -> jit_allocator2::ProtectJitAccess {
-        match access {
-            ProtectJitAccess::ReadExecute => jit_allocator2::ProtectJitAccess::ReadExecute,
-            ProtectJitAccess::ReadWrite => jit_allocator2::ProtectJitAccess::ReadWrite,
-        }
-    }
-
-    fn flush_instruction_cache(rx_ptr: *const u8, size: usize) {
-        #[cfg(all(target_arch = "arm", target_os = "linux"))]
-        unsafe {
-            const __ARM_NR_CACHEFLUSH: i32 = 0x0f0002;
-            libc::syscall(__ARM_NR_CACHEFLUSH, rx_ptr, rx_ptr.byte_add(size), 0);
-            return;
-        }
-        #[allow(unreachable_code)]
-        jit_allocator2::flush_instruction_cache(rx_ptr, size);
-    }
-
-    #[cfg(not(feature = "std"))]
-    static GLOBAL_JIT_ALLOC: spin::Mutex<Option<alloc::boxed::Box<JitAllocator>>> =
-        spin::Mutex::new(None);
-    #[cfg(feature = "std")]
-    static GLOBAL_JIT_ALLOC: std::sync::Mutex<Option<alloc::boxed::Box<JitAllocator>>> =
-        std::sync::Mutex::new(None);
-
-    impl super::GlobalJitAlloc {
-        fn use_alloc<T>(&self, action: impl FnOnce(&mut JitAllocator) -> T) -> T {
-            #[cfg(not(feature = "std"))]
-            let mut maybe_alloc = GLOBAL_JIT_ALLOC.lock();
-            #[cfg(feature = "std")]
-            let mut maybe_alloc = GLOBAL_JIT_ALLOC.lock().unwrap();
-
-            let alloc = maybe_alloc.get_or_insert_with(|| JitAllocator::new(Default::default()));
-            action(alloc)
-        }
-    }
-
-    #[cfg_attr(docsrs, doc(cfg(feature = "global_jit_alloc")))]
-    impl JitAlloc for super::GlobalJitAlloc {
-        fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-            self.use_alloc(|a| a.alloc(size)).map_err(|_| JitAllocError)
-        }
-
-        unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-            self.use_alloc(|a| a.release(rx_ptr)).map_err(|_| JitAllocError)
-        }
-
-        #[inline(always)]
-        unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-            flush_instruction_cache(rx_ptr, size);
-        }
-
-        #[inline(always)]
-        unsafe fn protect_jit_memory(
-            &self,
-            _ptr: *const u8,
-            _size: usize,
-            access: ProtectJitAccess,
-        ) {
-            jit_allocator2::protect_jit_memory(convert_access(access));
-        }
-    }
-
-    #[cfg(feature = "std")]
-    pub(super) mod thread_jit_alloc {
-        use core::{cell::UnsafeCell, marker::PhantomData};
-        use std::{boxed::Box, thread_local};
-
-        use jit_allocator2::JitAllocator;
-
-        #[allow(unused_imports)]
-        use super::*;
-
-        thread_local! {
-            static THREAD_JIT_ALLOC: UnsafeCell<Box<JitAllocator>> =
-                UnsafeCell::new(JitAllocator::new(Default::default()));
-        }
-
-        /// Marker type providing access to a thread-local JIT allocator.
-        ///
-        /// Unlike [`GlobalJitAlloc`], this allocator is neither [`Send`] nor [`Sync`].
-        #[derive(Default, Clone)]
-        pub struct ThreadJitAlloc(PhantomData<*mut ()>);
-
-        impl JitAlloc for ThreadJitAlloc {
-            fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-                THREAD_JIT_ALLOC
-                    .with(|a| unsafe { &mut *a.get() }.alloc(size))
-                    .map_err(|_| JitAllocError)
-            }
-
-            unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-                THREAD_JIT_ALLOC
-                    .with(|a| unsafe { &mut *a.get() }.release(rx_ptr))
-                    .map_err(|_| JitAllocError)
-            }
-
-            #[inline(always)]
-            unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-                flush_instruction_cache(rx_ptr, size);
-            }
-
-            #[inline(always)]
-            unsafe fn protect_jit_memory(
-                &self,
-                _ptr: *const u8,
-                _size: usize,
-                access: ProtectJitAccess,
-            ) {
-                jit_allocator2::protect_jit_memory(convert_access(access));
-            }
-        }
-    }
-}
 #[cfg(all(feature = "default_jit_alloc", feature = "std"))]
 #[doc(inline)]
-pub use default_jit_alloc::thread_jit_alloc::ThreadJitAlloc;
+pub use default_alloc::thread_jit_alloc::ThreadJitAlloc;
 
 /// Defines a global [`JitAlloc`] implementation which [`GlobalJitAlloc`] will defer to, provided
 /// that the `default_jit_alloc` feature is not enabled. Otherwise the latter takes priority.
@@ -267,6 +163,8 @@ pub use global_jit_alloc;
 
 #[cfg(all(feature = "global_jit_alloc", not(feature = "default_jit_alloc")))]
 mod custom_jit_alloc {
+    use core::alloc::Layout;
+
     use super::{GlobalJitAlloc, JitAlloc, JitAllocError, ProtectJitAccess};
 
     extern "Rust" {
@@ -277,13 +175,13 @@ mod custom_jit_alloc {
         unsafe { _closure_ffi_3_global_jit_alloc() }
     }
 
-    impl JitAlloc for GlobalJitAlloc {
-        fn alloc(&self, size: usize) -> Result<(*const u8, *mut u8), JitAllocError> {
-            get_global_jit_alloc().alloc(size)
+    unsafe impl JitAlloc for GlobalJitAlloc {
+        fn alloc(&self, layout: Layout) -> Result<(*const u8, *mut u8), JitAllocError> {
+            get_global_jit_alloc().alloc(layout)
         }
 
-        unsafe fn release(&self, rx_ptr: *const u8) -> Result<(), JitAllocError> {
-            get_global_jit_alloc().release(rx_ptr)
+        unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError> {
+            get_global_jit_alloc().release(rx_ptr, layout)
         }
 
         unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
