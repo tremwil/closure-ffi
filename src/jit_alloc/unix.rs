@@ -43,119 +43,150 @@ pub fn map_granularity() -> usize {
 pub unsafe fn map_rx_rw(size: usize) -> Option<(*const u8, *mut u8)> {
     debug_assert!(size.is_multiple_of(map_granularity()));
 
-    // Use a single backing fd for all maps by calling `ftruncate` and `mmap`-ing
-    // at an offset.
-    BackingFd::with_global(|fd| unsafe { fd.mmap_rx_rw(size, 0) })?
+    BackingFdProvider::with_global(|fd_provider| unsafe { fd_provider.mmap_rx_rw(size, 0) })
 }
 
 #[derive(Debug)]
-struct BackingFd {
-    fd: c_int,
-    size: usize,
+struct BackingFdProvider {
+    last_fd: Option<BackingFd>,
+    last_strategy: usize,
+    strategies: &'static [OpenStrategy],
 }
 
-impl BackingFd {
-    fn with_global<T>(action: impl FnOnce(&mut Self) -> T) -> Option<T> {
-        let mut maybe_fd = cfg_select! {
+#[derive(Debug)]
+enum BackingFd {
+    Resizable { fd: c_int, offset: usize },
+    FixedSize { fd: c_int },
+    Anonymous,
+}
+
+type OpenStrategy = fn(size: usize) -> ControlFlow<BackingFd>;
+
+impl BackingFdProvider {
+    fn with_global<T>(action: impl FnOnce(&mut Self) -> T) -> T {
+        let mut provider = cfg_select! {
             feature = "std" => {{
-                static FD: std::sync::Mutex<Option<Option<BackingFd>>> =
-                    std::sync::Mutex::new(None);
+                static FD: std::sync::Mutex<BackingFdProvider> =
+                    std::sync::Mutex::new(BackingFdProvider::new());
                 FD.lock().unwrap()
             }}
             _ => {{
-                static FD: spin::Mutex<Option<Option<BackingFd>>> = spin::Mutex::new(None);
+                static FD: spin::Mutex<BackingFdProvider> =
+                    spin::Mutex::new(BackingFdProvider::new());
                 FD.lock()
             }}
         };
 
-        let fd = maybe_fd.get_or_insert_with(Self::open).as_mut()?;
-        Some(action(fd))
+        action(&mut provider)
     }
 
-    /// Opens a fd that can be mapped as executable.
-    fn open() -> Option<Self> {
-        /// Tries mapping a fd as executable memory. A security policy might disallow this
-        /// for example when /dev/shm or /tmp are mounted as noexec.
-        fn try_map(page_size: size_t, fd: c_int) -> ControlFlow<BackingFd> {
-            unsafe {
-                let (prot, flags) = if fd == -1 {
-                    (PROT_RWX, MAP_PRIVATE | MAP_ANONYMOUS)
-                }
-                else if cfg!(target_os = "macos") {
-                    (PROT_RWX, MAP_PRIVATE)
-                }
-                else {
-                    (PROT_RX, MAP_SHARED)
-                };
-
-                #[cfg(target_os = "macos")]
-                let flags = flags | libc::MAP_JIT;
-
-                let rx = mmap(ptr::null_mut(), page_size, prot, flags, fd, 0);
-
-                if rx == MAP_FAILED {
-                    return ControlFlow::Continue(());
-                }
-
-                munmap(rx, page_size);
-
-                ControlFlow::Break(BackingFd { fd, size: 0 })
-            }
+    /// Creates a provider with multiple platform and feature flag dependent strategies
+    /// for opening a fd that can be mapped as executable.
+    ///
+    /// The first one to succeed is memoized, failed strategies are discarded.
+    const fn new() -> Self {
+        /// Fixed size fd (memfd, shm, Android shared memory).
+        fn fixed(fd: c_int) -> BackingFd {
+            BackingFd::FixedSize { fd }
         }
 
-        fn try_map_resize(page_size: size_t, fd: c_int) -> ControlFlow<BackingFd> {
-            unsafe {
-                if fd != -1 {
-                    if ftruncate(fd, page_size as off_t) != -1 {
-                        try_map(page_size, fd)?;
-                    }
-
-                    close(fd);
-                }
-
-                ControlFlow::Continue(())
-            }
+        /// Resizable fd (file backed).
+        fn resizable(fd: c_int) -> BackingFd {
+            BackingFd::Resizable { fd, offset: 0 }
         }
 
-        /// Attempts multiple strategies for opening a fd that can be mapped as executable.
-        ///
-        /// The first one to succeed is used:
-        ///
-        /// 1. `memfd_create` (Linux and Android only)
-        /// 2. `shm_open` with `SHM_ANON` (FreeBSD only)
-        /// 3. anonymous RWX mapping
-        ///
-        /// Target feature "shm_open_jit_alloc" only:
-        /// 4. `shm_open` with a randomly assigned name
-        ///
-        /// Target feature "tmp_file_jit_alloc" only:
-        /// 5. `tmpfile` into `fileno`
-        /// 6. `open` with `O_TMPFILE` in the CWD (Linux only)
-        /// 7. `open` with `O_TMPFILE` in $TMPDIR or /tmp (Linux only)
-        /// 8. `open` in $TMPDIR or /tmp with a randomly assigned name
-        fn do_open(page_size: usize) -> ControlFlow<BackingFd> {
-            try_map_resize(page_size, open_linux())?;
-            try_map_resize(page_size, open_freebsd())?;
-            try_map(page_size, -1)?;
-
-            #[cfg(feature = "shm_open_jit_alloc")]
-            try_map_resize(page_size, open_named_shm())?;
-
+        // 1. `memfd_create` (Linux and Android only)
+        // 2. `ASharedMemory_create` (Android only)
+        // 3. `shm_open` with `SHM_ANON` (FreeBSD only)
+        // 4. anonymous RWX mapping
+        //
+        // Target feature "shm_open_jit_alloc" only:
+        // 5. `shm_open` with a randomly assigned name
+        //
+        // Target feature "tmp_file_jit_alloc" only:
+        // 6. `tmpfile` into `fileno`
+        // 7. `open` with `O_TMPFILE` in the CWD (Linux only)
+        // 8. `open` with `O_TMPFILE` in $TMPDIR or /tmp (Linux only)
+        // 9. `open` in $TMPDIR or /tmp with a randomly assigned name
+        let strategies: &'static [OpenStrategy] = &[
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            |size| BackingFd::try_map_resize(size, memfd_create(), fixed),
+            #[cfg(all(target_os = "android", feature = "asharedmem_jit_alloc"))]
+            |size| BackingFd::try_map_resize(size, asharedmem_create(size), fixed),
+            #[cfg(all(target_os = "freebsd", feature = "shm_open_jit_alloc"))]
+            |size| BackingFd::try_map_resize(size, shm_open_anon(), fixed),
+            |size| BackingFd::try_map_anon(size),
+            #[cfg(all(
+                feature = "shm_open_jit_alloc",
+                not(target_vendor = "apple"),
+                not(target_os = "android"),
+            ))]
+            |size| BackingFd::try_map_resize(size, shm_open(), fixed),
             #[cfg(feature = "tmp_file_jit_alloc")]
-            {
-                try_map_resize(page_size, open_tmpfile())?;
-                try_map_resize(page_size, open_tmp_in_cwd())?;
-                try_map_resize(page_size, open_tmp_in_tmpdir())?;
-                try_map_resize(page_size, open_named_in_tmpdir())?;
-            }
+            |size| BackingFd::try_map_resize(size, tmpfile_fileno(), resizable),
+            #[cfg(all(feature = "tmp_file_jit_alloc", target_os = "linux"))]
+            |size| BackingFd::try_map_resize(size, open_o_tmpfile_in(c"./"), resizable),
+            #[cfg(all(feature = "tmp_file_jit_alloc", target_os = "linux"))]
+            |size| BackingFd::try_map_resize(size, open_o_tmpfile_in(tmpdir()), resizable),
+            #[cfg(feature = "tmp_file_jit_alloc")]
+            |size| BackingFd::try_map_resize(size, open_in_tmpdir(), resizable),
+        ];
 
-            ControlFlow::Continue(())
+        Self {
+            last_fd: None,
+            last_strategy: 0,
+            strategies,
         }
-
-        let page_size = unsafe { sysconf(_SC_PAGESIZE) as size_t };
-        do_open(page_size).break_value()
     }
 
+    /// Allocates a read-execute and a read-write mapping pointing to the same memory.
+    ///
+    /// The mappings may overlap and `pthread_jit_write_protect_np` must be called before
+    /// writing to the mapping on macOS.
+    ///
+    /// # Safety
+    ///
+    /// `size` must be a multiple of the value returned by [`map_granularity`].
+    unsafe fn mmap_rx_rw(&mut self, size: usize, flags: c_int) -> Option<(*const u8, *mut u8)> {
+        if self.last_fd.is_none() {
+            // This is first time initialization or the last fd was discarded.
+            // Need a new backing fd.
+            self.last_fd = self.new_fd(size).break_value();
+        }
+
+        // Take the fd so it is discarded on fail (or if it's fixed size).
+        let mut fd = self.last_fd.take()?;
+        let rx_rw = fd.mmap_rx_rw(size, flags)?;
+
+        // Fixed size fd are mapped fully and can't be reused.
+        if !matches!(fd, BackingFd::FixedSize { .. }) {
+            self.last_fd = Some(fd);
+        }
+
+        Some(rx_rw)
+    }
+
+    /// Goes through available fd opening strategies in order attempting to open a fd
+    /// that allows for executable memory.
+    ///
+    /// The first strategy to succeed is memoized, failed strategies are discarded.
+    ///
+    /// # Safety
+    ///
+    /// `size` must be a multiple of the value returned by [`map_granularity`].
+    unsafe fn new_fd(&mut self, size: usize) -> ControlFlow<BackingFd> {
+        for strategy in &self.strategies[self.last_strategy..] {
+            strategy(size)?;
+
+            // Don't try this strategy again.
+            self.last_strategy += 1;
+        }
+
+        ControlFlow::Continue(())
+    }
+}
+
+impl BackingFd {
     /// Allocates a read-execute and a read-write mapping pointing to the same memory.
     ///
     /// The mappings may overlap and `pthread_jit_write_protect_np` must be called before
@@ -194,22 +225,23 @@ impl BackingFd {
 
         let len = size.try_into().ok()?;
 
-        // Didn't acquire a fd for double mapping, fall back to a single anonymous one.
-        if self.fd == -1 {
-            return mmap_rwx(len, flags, self.fd, 0);
-        }
+        let (fd, offset) = match self {
+            Self::Resizable { fd, offset } => {
+                let cur_offset = off_t::try_from(*offset).ok()?;
+                let new_size = offset.checked_add(size)?;
 
-        let offset = self.size;
-        let new_size = self.size.checked_add(size)?;
+                // Grow the file by `size` to map the newly allocated memory.
+                if unsafe { ftruncate(*fd, new_size.try_into().ok()?) != 0 } {
+                    return None;
+                };
 
-        // Grow the file by `size` to map the newly allocated memory.
-        if unsafe { ftruncate(self.fd, new_size.try_into().ok()?) != 0 } {
-            return None;
+                *offset = new_size;
+
+                (*fd, cur_offset)
+            }
+            Self::FixedSize { fd } => (*fd, 0),
+            Self::Anonymous => return mmap_rwx(len, flags, -1, 0),
         };
-
-        let offset = offset.try_into().ok()?;
-
-        self.size = new_size;
 
         cfg_select! {
             // On macOS return a single mapping with the MAP_JIT flag.
@@ -218,13 +250,13 @@ impl BackingFd {
             _ => {
                 let flags = flags | MAP_SHARED;
 
-                let rx = unsafe { mmap(ptr::null_mut(), len, PROT_RX, flags, self.fd, offset) };
+                let rx = unsafe { mmap(ptr::null_mut(), len, PROT_RX, flags, fd, offset) };
 
                 if rx == MAP_FAILED {
                     return None;
                 }
 
-                let rw = unsafe { mmap(ptr::null_mut(), len, PROT_RW, flags, self.fd, offset) };
+                let rw = unsafe { mmap(ptr::null_mut(), len, PROT_RW, flags, fd, offset) };
 
                 if rw == MAP_FAILED {
                     munmap(rx, len);
@@ -235,57 +267,140 @@ impl BackingFd {
             }
         }
     }
-}
 
-fn open_linux() -> c_int {
-    cfg_select! {
-        any(target_os = "linux", target_os = "android") => unsafe {
-            // N.B. the name used with `memfd_create` does not have to be unique.
-            // Use a syscall in case `memfd_create` is not implemented.
-            libc::syscall(
-                libc::SYS_memfd_create,
-                c"closure-ffi".as_ptr(),
-                libc::MFD_CLOEXEC,
-            ) as c_int
-        },
-        _ => -1,
-    }
-}
-
-fn open_freebsd() -> c_int {
-    cfg_select! {
-        target_os = "freebsd" => unsafe {
-            libc::shm_open(libc::SHM_ANON, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR)
-        },
-        _ => -1,
-    }
-}
-
-fn open_named_shm() -> c_int {
-    cfg_select! {
-        not(any(target_vendor = "apple", target_os = "android")) => unsafe {
-            let id = random_id();
-
-            let name = alloc::format!("/closure-ffi-{id:016x}\0");
-            let name_ptr = name.as_ptr() as *const c_char;
-
-            let fd = libc::shm_open(
-                name.as_ptr() as *const c_char,
-                O_RDWR | O_CREAT | O_EXCL,
-                S_IRUSR | S_IWUSR,
-            );
-
-            if fd != -1 {
-                libc::shm_unlink(name_ptr);
+    /// Tries mapping a fd as executable memory. A security policy might disallow this
+    /// for example when /dev/shm or /tmp are mounted as noexec.
+    fn try_map(size: size_t, fd: c_int, f: impl FnOnce(c_int) -> Self) -> ControlFlow<Self> {
+        unsafe {
+            if fd == -1 {
+                return ControlFlow::Continue(());
             }
 
-            fd
-        },
-        _ => -1,
+            let (prot, flags) = cfg_select! {
+                target_os = "macos" => (PROT_RWX, MAP_PRIVATE | libc::MAP_JIT),
+                _ => (PROT_RX, MAP_SHARED),
+            };
+
+            let rx = mmap(ptr::null_mut(), size, prot, flags, fd, 0);
+
+            if rx == MAP_FAILED {
+                return ControlFlow::Continue(());
+            }
+
+            munmap(rx, size);
+
+            ControlFlow::Break(f(fd))
+        }
+    }
+
+    /// Tries mapping a resizable fd as executable memory.
+    ///
+    /// For memfd, shm and Android shared memory this may be the first and last allowed resize.
+    fn try_map_resize(size: size_t, fd: c_int, f: impl FnOnce(c_int) -> Self) -> ControlFlow<Self> {
+        unsafe {
+            if fd != -1 {
+                if ftruncate(fd, size as off_t) != -1 {
+                    Self::try_map(size, fd, f)?;
+                }
+
+                close(fd);
+            }
+
+            ControlFlow::Continue(())
+        }
+    }
+
+    /// Tries mapping anonymous read-write executable memory.
+    fn try_map_anon(size: size_t) -> ControlFlow<Self> {
+        unsafe {
+            let flags = cfg_select! {
+                target_os = "macos" => MAP_PRIVATE | MAP_ANONYMOUS | libc::MAP_JIT,
+                _ => MAP_PRIVATE | MAP_ANONYMOUS,
+            };
+
+            let rx = mmap(ptr::null_mut(), size, PROT_RWX, flags, -1, 0);
+
+            if rx == MAP_FAILED {
+                return ControlFlow::Continue(());
+            }
+
+            munmap(rx, size);
+
+            ControlFlow::Break(Self::Anonymous)
+        }
     }
 }
 
-fn open_tmpfile() -> c_int {
+impl Drop for BackingFd {
+    fn drop(&mut self) {
+        let (Self::Resizable { fd, .. } | Self::FixedSize { fd, .. }) = self
+        else {
+            return;
+        };
+
+        let fd = *fd;
+        if fd < 0 {
+            return;
+        }
+
+        unsafe {
+            close(fd);
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn memfd_create() -> c_int {
+    unsafe {
+        // N.B. the name used with `memfd_create` does not have to be unique.
+        // Use a syscall in case `memfd_create` is not implemented.
+        libc::syscall(
+            libc::SYS_memfd_create,
+            c"closure-ffi".as_ptr(),
+            libc::MFD_CLOEXEC,
+        ) as c_int
+    }
+}
+
+#[cfg(all(target_os = "android", feature = "asharedmem_jit_alloc"))]
+fn asharedmem_create(_size: usize) -> c_int {
+    unsafe {
+        let res = ndk_sys::ASharedMemory_create(ptr::null(), _size);
+        if res < 0 {
+            return -1;
+        }
+        res
+    }
+}
+
+#[cfg(target_os = "freebsd")]
+fn shm_open_anon() -> c_int {
+    unsafe { libc::shm_open(libc::SHM_ANON, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR) }
+}
+
+#[cfg(not(any(target_vendor = "apple", target_os = "android")))]
+fn shm_open() -> c_int {
+    unsafe {
+        let id = random_id();
+
+        let name = alloc::format!("/closure-ffi-{id:016x}\0");
+        let name_ptr = name.as_ptr() as *const c_char;
+
+        let fd = libc::shm_open(
+            name.as_ptr() as *const c_char,
+            O_RDWR | O_CREAT | O_EXCL,
+            S_IRUSR | S_IWUSR,
+        );
+
+        if fd != -1 {
+            libc::shm_unlink(name_ptr);
+        }
+
+        fd
+    }
+}
+
+fn tmpfile_fileno() -> c_int {
     unsafe {
         let file = tmpfile();
 
@@ -306,28 +421,18 @@ fn open_tmpfile() -> c_int {
     }
 }
 
-fn open_tmp_in_cwd() -> c_int {
-    open_tmp_in(c"./")
-}
-
-fn open_tmp_in_tmpdir() -> c_int {
-    open_tmp_in(tmpdir())
-}
-
-fn open_tmp_in(_dir: &CStr) -> c_int {
-    cfg_select! {
-        target_os = "linux" => unsafe {
-            open(
-                _dir.as_ptr(),
-                O_RDWR | O_EXCL | libc::O_TMPFILE | libc::O_CLOEXEC,
-                (S_IRUSR | S_IWUSR) as c_uint,
-            )
-        },
-        _ => -1,
+#[cfg(target_os = "linux")]
+fn open_o_tmpfile_in(_dir: &CStr) -> c_int {
+    unsafe {
+        open(
+            _dir.as_ptr(),
+            O_RDWR | O_EXCL | libc::O_TMPFILE | libc::O_CLOEXEC,
+            (S_IRUSR | S_IWUSR) as c_uint,
+        )
     }
 }
 
-fn open_named_in_tmpdir() -> c_int {
+fn open_in_tmpdir() -> c_int {
     unsafe {
         let id = random_id();
         let mut tmp = tmpdir().to_owned().into_bytes();
