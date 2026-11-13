@@ -245,7 +245,7 @@ impl BackingFd {
 
         cfg_select! {
             // On macOS return a single mapping with the MAP_JIT flag.
-            target_os = "macos" => mmap_rwx(len, flags, self.fd, offset),
+            target_os = "macos" => mmap_rwx(len, flags, fd, offset),
             // On other platforms return a double mapping.
             _ => {
                 let flags = flags | MAP_SHARED;
