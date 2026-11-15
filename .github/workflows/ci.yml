@@ -1,9 +1,16 @@
 name: Checks
 on:
   push:
-    branches: [dev]
+    branches:
+      - master
+  workflow_dispatch:
   pull_request:
-    branches-ignore: [master]
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   fmt:
@@ -11,11 +18,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
         with:
+          toolchain: nightly
           components: rustfmt
-      - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
 
   check:
@@ -37,21 +44,19 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: ${{ matrix.toolchain }}
           components: clippy
-      - uses: Swatinem/rust-cache@v2
       - run: RUSTFLAGS="-Dwarnings" cargo clippy --workspace --all-targets ${{ matrix.features }}
 
   doc:
     name: cargo doc
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
       - run: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --no-deps -F proc_macros
 
   build-and-test-native:
@@ -87,16 +92,14 @@ jobs:
     needs: [fmt, check] # don't bother running tests if cargo check/fmt doesn't pass
     runs-on: ${{ matrix.target.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install gcc-multilib for i686 cross-compilation
         if: ${{ matrix.target.target == 'i686-unknown-linux-gnu' }}
         run: sudo apt-get update && sudo apt-get install -y gcc-multilib
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: ${{ matrix.toolchain }}
           targets: ${{ matrix.target.target }}
-      - uses: Swatinem/rust-cache@v2
       - name: Build and test (debug)
         id: test-debug
         run: cargo test --target ${{ matrix.target.target }} ${{ matrix.features }}
@@ -126,9 +129,10 @@ jobs:
     needs: [fmt, check]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
       - name: Setup cargo binstall
-        uses: cargo-bins/cargo-binstall@main
+        uses: cargo-bins/cargo-binstall@5885714d0a40a14b2535c6ffc051fd8e49aa9665 # v1.27.0
       - name: Install cargo cross 
         run: cargo binstall cross
       - name: Build and test (debug)
@@ -137,6 +141,23 @@ jobs:
       - name: Build and test (release)
         if: ${{ success() || steps.test-debug.conclusion == 'failure' }}
         run: cross ${{ matrix.nightly }} test --target ${{ matrix.target }} ${{ matrix.features }}
+
+  check-release-readiness:
+    name: Release readiness checks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
+      - name: Is this a release PR
+        id: is-release
+        run: python ./.github/scripts/is_release.py >> "${GITHUB_OUTPUT}"
+      - name: Publish dry-run
+        if: ${{ steps.is-release.outputs.is_release == 'true' }}
+        run: cargo publish --workspace --dry-run
+      - name: Generate release notes
+        if: ${{ steps.is-release.outputs.is_release == 'true' }}
+        run: python ./.github/scripts/release_notes.py
 
   all_checks_pass:
     needs:
@@ -148,6 +169,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Decide whether the needed jobs succeeded or failed
-      uses: re-actors/alls-green@release/v1
+      uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
       with:
         jobs: ${{ toJSON(needs) }}
