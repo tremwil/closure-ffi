@@ -1,4 +1,5 @@
 import package_version
+import sys
 from subprocess import PIPE, Popen
 
 version = package_version.get_version()
@@ -11,9 +12,10 @@ p = Popen(
 stdout, stderr = p.communicate()
 
 if p.returncode == 0:
-    print(f"error: closure-ffi {version} already exists on crates.io")
-    exit(1)
+    print("is_release=false")
 elif b"error: could not find" not in stderr:
-    print("error: failed to query crates.io registry:\n")
-    print(stderr)
+    print("error: failed to query crates.io registry:\n", file=sys.stderr)
+    print(stderr, file=sys.stderr)
     exit(1)
+else:
+    print("is_release=true")

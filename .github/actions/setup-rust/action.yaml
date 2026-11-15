@@ -1,0 +1,28 @@
+name: Setup Rust
+description: Setup Rust
+inputs:
+  toolchain:
+    description: Rust toolchain to use (stable or nightly)
+    required: false
+    default: stable
+  components:
+    description: Rust components to install with toolchain
+    required: false
+    default: ''
+  targets:
+    description: List of Rust targets to install
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # 2026-15-11
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
