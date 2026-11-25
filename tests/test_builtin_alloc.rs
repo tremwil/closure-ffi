@@ -4,7 +4,7 @@
 #![cfg(not(target_arch = "arm"))]
 
 #[allow(unused_imports)]
-use closure_ffi::{traits::FnPtr, BareFn, BareFnMut, BareFnOnce};
+use closure_ffi::{traits::CallWith, BareFn, BareFnMut, BareFnOnce};
 
 #[test]
 fn test_infer_closure() {

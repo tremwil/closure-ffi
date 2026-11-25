@@ -270,7 +270,7 @@ fn test_upcast() {
 fn test_wrap() {
     use closure_ffi::{
         thunk_factory,
-        traits::{FnMutThunk, FnPtr, FnThunk},
+        traits::{CallWith, FnMutThunk, FnThunk},
         BareFnSync,
     };
 

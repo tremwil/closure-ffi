@@ -11,11 +11,11 @@ use core::{
 
 use rlsf::{FlexSource, FlexTlsf};
 
+use super::JitAllocError;
 #[cfg(unix)]
 use crate::jit_alloc::unix::{map_granularity, map_rx_rw};
 #[cfg(windows)]
 use crate::jit_alloc::windows::{map_granularity, map_rx_rw};
-use crate::JitAllocError;
 
 pub struct JitTlsf {
     inner: FlexTlsf<Source, u32, u16, { u32::BITS as usize }, { u16::BITS as usize }>,
@@ -235,7 +235,7 @@ cfg_select! {
 mod tests {
     use core::alloc::Layout;
 
-    use crate::jit_alloc::jit_tlsf::{JitTlsf, TrapCode, TRAP};
+    use crate::jit_alloc::jit_tlsf::{JitTlsf, TRAP, TrapCode};
 
     static ALLOC: spin::Mutex<JitTlsf> = spin::Mutex::new(JitTlsf::new());
 

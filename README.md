@@ -113,12 +113,6 @@ The crate comes with the following feature flags:
 - `proc_macros`: Provides the `bare_hrtb` proc macro which is necessary for creating bare
   functions with signatures that involve higher-kinded lifetimes (i.e. `for<'a, ...>` statements).
 
-- `safe_jit` (**default**): Implements disassembler-aided relocation of the thunk template prologue. This is not so much a feature as it is an integral part of the crate.  
-
-  Without it, the crate makes the (unsafe) assumption that the thunk prologues are trivially relocatable, and blocks certain compiler optimizations to try to uphold this. However, **this is not guaranteed and UB is a real possibility**. While this feature can be disabled to improve compatibility with targets for which the dependency on the Capstone disassembler (a C library) cannot be built, I would strongly suggest not doing so.
-
-- `no_safe_jit`: Since not having `safe_jit` enabled is inherently unsafe, the crate will refuse to build unless this feature is enabled to prevent accidentally forgetting `safe_jit` on `--no-default-feature` builds.
-
 ### Unstable (require a nightly compiler)
 - `unstable`: Enable the use of unstable Rust features for aspects of the crate that benefit from 
   them without causing any API breaks. Unstable features that can cause breaking changes when enabled 

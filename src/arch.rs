@@ -3,324 +3,89 @@
 //!
 //! While parts of this module are public for macro reasons, they should not be used directly.
 
-use core::alloc::Layout;
+use core::{alloc::Layout, debug_assert_matches};
 
 use crate::jit_alloc::{JitAlloc, JitAllocError, ProtectJitAccess};
-#[cfg(feature = "safe_jit")]
-use crate::safe_jit::RelocThunk;
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[doc(hidden)]
-pub mod consts {
-    // Define it as 2 u64s to use with inline asm const directive
-    pub(super) type Magic = [u64; 2];
-    pub const CLOSURE_ADDR_MAGIC: Magic = {
-        // lock (x14) push rax/eax, which is invalid no matter the offset into the sequence
-        // Credit: https://github.com/Dasaav-dsv/
-        #[repr(C)]
-        struct LockPushRax([u8; 14], [u8; 2]);
-        // SAFETY: bit pattern is valid for dest type and sizes match
-        unsafe { core::mem::transmute_copy(&LockPushRax([0xF0; 14], [0xFF, 0xF0])) }
-    };
+#[cfg_attr(target_arch = "aarch64", path = "arch/aarch64.rs")]
+#[cfg_attr(target_arch = "arm", path = "arch/arm.rs")]
+#[cfg_attr(target_arch = "x86", path = "arch/x86.rs")]
+#[cfg_attr(target_arch = "x86_64", path = "arch/x86_64.rs")]
+mod arch_impl;
 
-    pub const THUNK_RETURN_OFFSET: usize = size_of::<Magic>();
-    pub const THUNK_EXTRA_SIZE: isize = THUNK_RETURN_OFFSET as isize;
+pub use arch_impl::THUNK_ALIGN;
 
-    #[cfg(target_arch = "x86")]
-    mod inner {
-        pub const CLOSURE_ADDR_OFFSET: isize = -15;
-        pub const THUNK_RETURN_ADDR_OFFSET: isize = -10;
-        pub const THUNK_CODE_OFFSET: isize = -16;
+pub struct AllocatedThunk<J: JitAlloc> {
+    rx: *const u8,
+    thunk_size: usize,
+    alloc: J,
+}
+
+impl<J: JitAlloc> AllocatedThunk<J> {
+    pub fn new_zst_in(alloc: J) -> Self {
+        Self {
+            rx: core::ptr::without_provenance(THUNK_ALIGN),
+            thunk_size: 0,
+            alloc,
+        }
     }
 
-    #[cfg(target_arch = "x86_64")]
-    mod inner {
-        pub const CLOSURE_ADDR_OFFSET: isize = 0;
-        pub const THUNK_RETURN_ADDR_OFFSET: isize = 8;
+    pub fn try_new_in<F>(alloc: J, thunk_size: usize, init: F) -> Result<Self, JitAllocError>
+    where
+        F: FnOnce(*const u8, *mut u8),
+    {
+        let (rx, rw) = alloc
+            .alloc(Layout::from_size_align(thunk_size, THUNK_ALIGN).expect("invalid layout"))?;
+
+        unsafe {
+            alloc.protect_jit_memory(rx, thunk_size, ProtectJitAccess::ReadWrite);
+        }
+
+        struct DropGuard<'a, J: JitAlloc>(&'a AllocatedThunk<J>);
+        impl<J: JitAlloc> Drop for DropGuard<'_, J> {
+            fn drop(&mut self) {
+                unsafe {
+                    self.0.alloc.protect_jit_memory(
+                        self.0.rx,
+                        self.0.thunk_size,
+                        ProtectJitAccess::ReadExecute,
+                    );
+                }
+            }
+        }
+
+        let this = AllocatedThunk {
+            rx,
+            thunk_size,
+            alloc,
+        };
+
+        let guard = DropGuard(&this);
+        init(rx, rw);
+
+        core::mem::forget(guard);
+        Ok(this)
     }
-
-    pub(crate) use inner::*;
-}
-
-#[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
-#[doc(hidden)]
-pub mod consts {
-    pub(super) type Magic = usize;
-
-    // UDF 0xDEAD repeated twice
-    #[cfg(target_arch = "aarch64")]
-    pub const CLOSURE_ADDR_MAGIC: Magic = 0x0000DEAD0000DEAD_u64 as usize;
-
-    // UDF 0xDEAD
-    #[cfg(all(target_arch = "arm", not(thumb_mode)))]
-    pub const CLOSURE_ADDR_MAGIC: Magic = 0xE7FDEAFD;
-
-    // UDF #42 repeated twice
-    #[cfg(all(target_arch = "arm", thumb_mode))]
-    pub const CLOSURE_ADDR_MAGIC: Magic = 0xDE2ADE2A;
-
-    pub(super) const THUNK_RETURN_OFFSET: usize = 2 * size_of::<usize>();
-    pub(super) const THUNK_EXTRA_SIZE: isize = THUNK_RETURN_OFFSET as isize;
-    pub(super) const CLOSURE_ADDR_OFFSET: isize = 0;
-    pub(super) const THUNK_RETURN_ADDR_OFFSET: isize = size_of::<usize>() as isize;
-}
-
-// We perform aligned reads at the pointer size, so make sure the align is sufficient
-const _ASSERT_MAGIC_TYPE_SUFFICIENT_ALIGN: () =
-    assert!(align_of::<consts::Magic>() >= align_of::<usize>());
-
-// We have to expose the thunk asm macros to allow the hrtb_cc proc macro to generate more complex
-// thunk templates
-
-/// Internal. Do not use.
-#[cfg(target_arch = "x86_64")]
-#[doc(hidden)]
-#[macro_export]
-macro_rules! _thunk_asm {
-    ($closure_ptr:ident) => {
-        ::core::arch::asm!(
-            "mov {cl_addr}, [rip + 2f]",
-            "jmp [rip + 2f+$8]",
-            ".balign 8, 0xCC",
-            "2:",
-            ".8byte {cl_magic_0}",
-            ".8byte {cl_magic_1}",
-            cl_magic_0 = const { $crate::arch::consts::CLOSURE_ADDR_MAGIC[0] },
-            cl_magic_1 = const { $crate::arch::consts::CLOSURE_ADDR_MAGIC[1] },
-            cl_addr = out(reg) $closure_ptr,
-            options(nostack)
-        );
-    };
-}
-
-/// Internal. Do not use.
-#[cfg(target_arch = "x86")]
-#[doc(hidden)]
-#[macro_export]
-macro_rules! _thunk_asm {
-    ($closure_ptr:ident) => {
-        ::core::arch::asm!(
-            ".balign 8",
-            "movl $0xC0DEC0DE, {cl_addr}",
-            "movl $0xC0DEC0DE, {jmp_addr}",
-            "jmp *{jmp_addr}",
-            // the above 3 instructions are 12 bytes, so we need 4 of padding for
-            // proper alignment of the magic constant
-            ".4byte 0xCCCCCCCC",
-            ".8byte {cl_magic_0}",
-            ".8byte {cl_magic_1}",
-            cl_magic_0 = const { $crate::arch::consts::CLOSURE_ADDR_MAGIC[0] },
-            cl_magic_1 = const { $crate::arch::consts::CLOSURE_ADDR_MAGIC[1] },
-            cl_addr = out(reg) $closure_ptr,
-            jmp_addr = out(reg) _,
-            options(nostack, att_syntax)
-        );
-    };
-}
-
-/// Internal. Do not use.
-#[cfg(target_arch = "aarch64")]
-#[doc(hidden)]
-#[macro_export]
-macro_rules! _thunk_asm {
-    ($closure_ptr:ident) => {
-        ::core::arch::asm!(
-            "ldr {cl_addr}, 1f",
-            "ldr {jmp_addr}, 2f",
-            "br {jmp_addr}",
-            ".balign 8",
-            "1:",
-            ".8byte {cl_magic}",
-            "2:",
-            ".8byte 0",
-            cl_magic = const { $crate::arch::consts::CLOSURE_ADDR_MAGIC },
-            cl_addr = out(reg) $closure_ptr,
-            jmp_addr = out(reg) _,
-            options(nostack)
-        );
-    };
-}
-
-/// Internal. Do not use.
-#[cfg(target_arch = "arm")]
-#[doc(hidden)]
-#[macro_export]
-macro_rules! _thunk_asm {
-    ($closure_ptr:ident) => {
-        ::core::arch::asm!(
-            "ldr {cl_addr}, 1f",
-            "ldr {jmp_addr}, 2f",
-            "bx {jmp_addr}",
-            ".balign 4",
-            "1:",
-            ".4byte {cl_magic}",
-            "2:",
-            ".4byte 0",
-            cl_magic = const { $crate::arch::consts::CLOSURE_ADDR_MAGIC },
-            cl_addr = out(reg) $closure_ptr,
-            jmp_addr = out(reg) _,
-            options(nostack)
-        );
-    };
-}
-
-#[derive(Debug)]
-pub(crate) struct AllocatedThunk<J: JitAlloc> {
-    thunk: *const (),
-    thunk_len: usize,
-    jit: J,
 }
 
 impl<J: JitAlloc> Drop for AllocatedThunk<J> {
     fn drop(&mut self) {
-        if self.thunk_len == 0 {
-            // No memory to release.
-            return;
-        }
+        if self.thunk_size == 0 {
+            // On ARM, clear the thumb mode bit if set
+            if cfg!(target_arch = "arm") {
+                self.rx = self.rx.map_addr(|a| a & !1);
+            }
 
-        unsafe {
-            let layout =
-                Layout::from_size_align_unchecked(self.thunk_len, align_of::<consts::Magic>());
-
-            // When in thumb mode, the thunk pointer will have the lower bit set to 1.
-            let thunk_rx = self.thunk;
-            #[cfg(thumb_mode)]
-            let thunk_rx = thunk_rx.map_addr(|a| a & !1);
-
-            let _ = self.jit.release(thunk_rx.cast(), layout);
+            unsafe {
+                debug_assert_matches!(
+                    self.alloc.release(
+                        self.rx,
+                        Layout::from_size_align_unchecked(self.thunk_size, THUNK_ALIGN),
+                    ),
+                    Ok(_),
+                    "closure-ffi thunk deallocation failed"
+                );
+            }
         }
     }
 }
-
-impl<J: JitAlloc> AllocatedThunk<J> {
-    /// Gets a pointer to the JITed bare function thunk.
-    pub fn thunk_ptr(&self) -> *const () {
-        self.thunk
-    }
-
-    /// JITs a thunk to a closure from a thunk template.
-    ///
-    /// Note that if the closure is a ZST, no JIT allocation occurs as the thunk template is a valid
-    /// thunk for all instances of the closure.
-    ///
-    /// # Panics
-    /// If the `safe_jit` feature is enabled and the thunk template prologue cannot be relocated.
-    ///
-    /// # Safety
-    /// Given a closure of type `F`, the following must hold:
-    /// - `size_of::<F>() == closure_size`.
-    /// - `thunk_template` is a pointer obtained via the associated const of the
-    ///   `crate::thunk::Fn*Thunk<C, B>` trait implemented on (C, F). Namely, it is:
-    ///   - if `F` is not a ZST, a bare function that first invokes [`_thunk_asm`] to obtain the
-    ///     closure pointer, then invokes it;
-    ///   - if `F` is a ZST, a bare function that creates a dangling closure pointer and invokes it.
-    /// - `closure_ptr` is a valid pointer to an initialized instance of `F` (note: may be dandling
-    ///   if `F` is a ZST!).
-    pub unsafe fn new(
-        thunk_template_ptr: *const u8,
-        closure_ptr: *const (),
-        closure_size: usize,
-        jit: J,
-    ) -> Result<Self, JitAllocError> {
-        if closure_size == 0 {
-            return Ok(AllocatedThunk {
-                thunk: thunk_template_ptr.cast(),
-                thunk_len: 0,
-                jit,
-            });
-        }
-
-        const MAGIC_ALIGN: usize = align_of::<consts::Magic>();
-
-        // When in thumb mode, the thunk pointer will have the lower bit set to 1. Clear it
-        #[cfg(thumb_mode)]
-        let thunk_template_ptr = thunk_template_ptr.map_addr(|a| a & !1);
-
-        // Align to pointer size and search for the magic number to be replaced by the
-        // closure address
-        let mut template_magic_offset = thunk_template_ptr.align_offset(MAGIC_ALIGN);
-        while thunk_template_ptr.add(template_magic_offset).cast::<consts::Magic>().read()
-            != consts::CLOSURE_ADDR_MAGIC
-        {
-            template_magic_offset += MAGIC_ALIGN;
-        }
-
-        let template_size = template_magic_offset.wrapping_add_signed(consts::THUNK_EXTRA_SIZE);
-        let thunk_template =
-            unsafe { core::slice::from_raw_parts(thunk_template_ptr, template_size) };
-
-        #[cfg(not(feature = "safe_jit"))]
-        let (thunk, magic_offset) = (thunk_template, template_magic_offset);
-
-        #[cfg(feature = "safe_jit")]
-        let RelocThunk {
-            thunk,
-            magic_offset,
-        } = crate::safe_jit::reloc_thunk_template(
-            thunk_template,
-            thunk_template_ptr as usize,
-            template_magic_offset,
-        );
-
-        let layout =
-            Layout::from_size_align(thunk.len(), MAGIC_ALIGN).map_err(|_| JitAllocError)?;
-        let (thunk_rx, rw) = jit.alloc(layout)?;
-
-        jit.protect_jit_memory(thunk_rx, thunk.len(), ProtectJitAccess::ReadWrite);
-
-        // Copy the prologue + asm block from the compiler-generated thunk
-        core::ptr::copy_nonoverlapping(thunk.as_ptr(), rw, thunk.len());
-
-        // Write the closure pointer
-        rw.add(magic_offset.wrapping_add_signed(consts::CLOSURE_ADDR_OFFSET))
-            .cast::<*const ()>()
-            .write_unaligned(closure_ptr);
-
-        // Write the jump back to the compiler-generated thunk
-        let thunk_return =
-            thunk_template_ptr.add(template_magic_offset + consts::THUNK_RETURN_OFFSET);
-        // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
-        #[cfg(thumb_mode)]
-        let thunk_return = thunk_return.map_addr(|a| a | 1);
-        rw.add(magic_offset.wrapping_add_signed(consts::THUNK_RETURN_ADDR_OFFSET))
-            .cast::<*const u8>()
-            .write_unaligned(thunk_return);
-
-        jit.protect_jit_memory(thunk_rx, thunk.len(), ProtectJitAccess::ReadExecute);
-        jit.flush_instruction_cache(thunk_rx, thunk.len());
-
-        // When in thumb mode, set the lower bit to one so we don't switch to A32 mode
-        #[cfg(thumb_mode)]
-        let thunk_rx = thunk_rx.map_addr(|a| a | 1);
-
-        Ok(AllocatedThunk {
-            thunk: thunk_rx.cast(),
-            thunk_len: thunk.len(),
-            jit,
-        })
-    }
-}
-
-/// Runs the provided closure and returns the result.
-///
-/// When `safe_jit` is turned off, it is necessary to prevent the compiler from inlining a
-/// closure call into the thunk function, as it may bring in some PC-relative operations the
-/// prologue on architectures other than x86_64. This function controls this behavior.
-#[doc(hidden)]
-#[cfg(not(feature = "safe_jit"))]
-#[inline(never)]
-pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
-    // Empty asm block is not declared as pure, so may have side-effects
-    // Necessary to make inline(never) actually work
-    unsafe { core::arch::asm!("", options(nostack)) }
-    f()
-}
-
-#[doc(hidden)]
-#[cfg(feature = "safe_jit")]
-#[inline(always)]
-pub fn _invoke<R>(f: impl FnOnce() -> R) -> R {
-    f()
-}
-
-pub use _thunk_asm;

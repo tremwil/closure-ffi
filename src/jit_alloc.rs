@@ -20,6 +20,8 @@ mod windows;
 #[derive(Debug)]
 pub struct JitAllocError;
 
+pub type Result<T, E = JitAllocError> = core::result::Result<T, E>;
+
 /// Values to use with [`JitAlloc::protect_jit_memory`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ProtectJitAccess {
@@ -86,17 +88,17 @@ unsafe impl<J: JitAlloc, D: Deref<Target = J>> JitAlloc for D {
     }
 
     unsafe fn release(&self, rx_ptr: *const u8, layout: Layout) -> Result<(), JitAllocError> {
-        (**self).release(rx_ptr, layout)
+        unsafe { (**self).release(rx_ptr, layout) }
     }
 
     #[inline(always)]
     unsafe fn flush_instruction_cache(&self, rx_ptr: *const u8, size: usize) {
-        (**self).flush_instruction_cache(rx_ptr, size);
+        unsafe { (**self).flush_instruction_cache(rx_ptr, size) }
     }
 
     #[inline(always)]
     unsafe fn protect_jit_memory(&self, ptr: *const u8, size: usize, access: ProtectJitAccess) {
-        (**self).protect_jit_memory(ptr, size, access);
+        unsafe { (**self).protect_jit_memory(ptr, size, access) }
     }
 }
 

@@ -12,11 +12,10 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(feature = "safe_jit")]
-mod safe_jit;
-
 #[doc(hidden)]
 pub mod arch;
+
+mod macros;
 
 pub mod bare_closure;
 pub mod cc;
@@ -24,18 +23,18 @@ pub mod jit_alloc;
 pub mod thunk_factory;
 pub mod traits;
 
-/// Common imports required to use `closure-ffi`.
-pub mod prelude {
-    #[doc(inline)]
-    pub use super::bare_closure::{
-        BareFn, BareFnAny, BareFnMut, BareFnMutAny, BareFnMutSync, BareFnOnce, BareFnOnceAny,
-        BareFnOnceSync, BareFnSync, UntypedBareFn, UntypedBareFnMut, UntypedBareFnOnce,
-    };
-    #[doc(inline)]
-    pub use super::cc;
-    #[doc(inline)]
-    pub use super::jit_alloc::{JitAlloc, JitAllocError};
-}
+// /// Common imports required to use `closure-ffi`.
+// pub mod prelude {
+//     #[doc(inline)]
+//     pub use super::bare_closure::{
+//         BareFn, BareFnAny, BareFnMut, BareFnMutAny, BareFnMutSync, BareFnOnce, BareFnOnceAny,
+//         BareFnOnceSync, BareFnSync, UntypedBareFn, UntypedBareFnMut, UntypedBareFnOnce,
+//     };
+//     #[doc(inline)]
+//     pub use super::cc;
+//     #[doc(inline)]
+//     pub use super::jit_alloc::{JitAlloc, JitAllocError};
+// }
 
-#[doc(inline)]
-pub use prelude::*;
+// #[doc(inline)]
+// pub use prelude::*;

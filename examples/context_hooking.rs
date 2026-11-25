@@ -9,12 +9,12 @@
 use core::marker::PhantomData;
 
 use closure_ffi::{
-    traits::{FnPtr, FnThunk, ToBoxedDyn},
+    traits::{CallWith, FnThunk, ToBoxedDyn},
     BareFnAny,
 };
 
 /// Context object storing information about the current hook.
-pub struct HookCtx<'a, B: FnPtr> {
+pub struct HookCtx<'a, B: CallWith> {
     /// A function pointer to a trampoline that runs the original function's code.
     pub original: B,
     phantom: PhantomData<&'a ()>,
@@ -26,13 +26,13 @@ pub struct HookCtx<'a, B: FnPtr> {
 mod unstable {
     use core::marker::PhantomData;
 
-    use closure_ffi::traits::FnPtr;
+    use closure_ffi::traits::CallWith;
 
     use super::HookCtx;
 
-    struct FnPtrCall<'x, 'y, 'z, B: FnPtr>(B, PhantomData<(&'x mut (), &'y mut (), &'z mut ())>);
+    struct FnPtrCall<'x, 'y, 'z, B: CallWith>(B, PhantomData<(&'x mut (), &'y mut (), &'z mut ())>);
 
-    impl<'x, 'y, 'z, B: FnPtr> FnOnce<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
+    impl<'x, 'y, 'z, B: CallWith> FnOnce<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
     where
         B: 'x + 'y + 'z,
     {
@@ -42,7 +42,7 @@ mod unstable {
             unsafe { self.0.call(args) }
         }
     }
-    impl<'x, 'y, 'z, B: FnPtr> FnMut<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
+    impl<'x, 'y, 'z, B: CallWith> FnMut<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
     where
         B: 'x + 'y + 'z,
     {
@@ -50,7 +50,7 @@ mod unstable {
             unsafe { self.0.call(args) }
         }
     }
-    impl<'x, 'y, 'z, B: FnPtr> Fn<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
+    impl<'x, 'y, 'z, B: CallWith> Fn<B::Args<'x, 'y, 'z>> for FnPtrCall<'x, 'y, 'z, B>
     where
         B: 'x + 'y + 'z,
     {
@@ -59,7 +59,7 @@ mod unstable {
         }
     }
 
-    impl<'a, B: FnPtr> HookCtx<'a, B> {
+    impl<'a, B: CallWith> HookCtx<'a, B> {
         /// Get an opaque closure type that invokes the original function.
         ///
         /// # Safety
@@ -77,7 +77,7 @@ mod unstable {
     }
 }
 
-impl<'a, B: FnPtr> HookCtx<'a, B> {
+impl<'a, B: CallWith> HookCtx<'a, B> {
     /// Calls the original function (stable).
     ///
     /// # Safety
@@ -120,7 +120,7 @@ impl<'a, B: FnPtr> HookCtx<'a, B> {
 ///   closure's type annotations. These are best used when declaring a short-lived object which
 ///   doesn't get assigned to an already-typed field. In this example, [`Hook::with_cc`] and
 ///   [`Hook::with_cc_ctx`] follow this idiom.
-pub struct Hook<'a, B: FnPtr> {
+pub struct Hook<'a, B: CallWith> {
     // We use `BareFnAny` to specify stronger bounds (`Send + Sync`) on the type-erased closure.
     // By doing this, `Self` automatically implements `Send` and `Sync`, no need for unsafe impls!
     bare_wrapper: BareFnAny<B, dyn Send + Sync + 'a>,
@@ -128,7 +128,7 @@ pub struct Hook<'a, B: FnPtr> {
     // the target function's address, etc.
 }
 
-impl<'a, B: FnPtr> Hook<'a, B> {
+impl<'a, B: CallWith> Hook<'a, B> {
     /// Internals not relevant for this example
     fn make_context() -> HookCtx<'a, B> {
         // For the purpose of type inference tests, give out a dangling original `B`
