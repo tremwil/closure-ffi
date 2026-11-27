@@ -11,9 +11,6 @@ use core::alloc::Layout;
 use core::ops::Deref;
 
 mod default_alloc;
-mod jit_tlsf;
-mod unix;
-mod windows;
 
 /// Anonymous error that may be returned by [`JitAlloc`] implementations when [`JitAlloc::alloc`] or
 /// [`JitAlloc::release`] fail.
